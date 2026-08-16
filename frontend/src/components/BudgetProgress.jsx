@@ -107,7 +107,7 @@ const BudgetProgress = ({ progress }) => {
             Budget Progress
           </h3>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Current month's spending vs budget goals
+            Current month's expenses vs budget goals
           </p>
         </div>
         <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
@@ -209,7 +209,7 @@ const BudgetProgress = ({ progress }) => {
                   </div>
                 </div>
                 <div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">Transactions</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">Records</div>
                   <div className="text-sm font-semibold text-gray-700 dark:text-gray-300">
                     {item.transactionCount}
                   </div>

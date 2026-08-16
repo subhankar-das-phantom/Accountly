@@ -16,8 +16,19 @@ const transactionSchema = new Schema({
   },
   type: {
     type: String,
-    enum: ['income', 'expense'],
+    enum: ['contribution', 'expense'],
     required: true
+  },
+  contributor: {
+    name: { type: String, trim: true }
+  },
+  recipient: {
+    name: { type: String, trim: true }
+  },
+  status: {
+    type: String,
+    enum: ['pending', 'received', 'cancelled'],
+    default: 'received'
   },
   category: {
     type: String,

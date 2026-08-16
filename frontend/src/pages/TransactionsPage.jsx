@@ -30,6 +30,7 @@ import { useTimeFilter } from "../context/TimeFilterContext";
 import { formatCurrency as formatCurrencyUtil } from "../utils/currency";
 import Button from "../components/common/Button";
 import Card from "../components/common/Card";
+import { ALL_CATEGORIES } from "../constants/financeCategories";
 
 const TransactionsPage = () => {
   const { currency } = useCurrency();
@@ -62,23 +63,6 @@ const TransactionsPage = () => {
 
   // Debounced search term
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
-
-  // Predefined categories
-  const categories = [
-    "Food & Dining",
-    "Transportation",
-    "Shopping",
-    "Entertainment",
-    "Bills & Utilities",
-    "Healthcare",
-    "Education",
-    "Travel",
-    "Salary",
-    "Freelance",
-    "Business",
-    "Investments",
-    "Other",
-  ];
 
   // Animation variants
   const containerVariants = {
@@ -137,18 +121,18 @@ const TransactionsPage = () => {
   const transactions = rawData?.transactions || rawData || [];
 
   // Calculate stats from the current dataset
-  const income = transactions
-    .filter((t) => t.type === "income")
+  const collected = transactions
+    .filter((t) => t.type === "contribution")
     .reduce((sum, t) => sum + parseFloat(t.amount), 0);
 
-  const expenses = transactions
+  const spent = transactions
     .filter((t) => t.type === "expense")
     .reduce((sum, t) => sum + parseFloat(t.amount), 0);
 
   const stats = {
-    totalIncome: income,
-    totalExpenses: expenses,
-    netBalance: income - expenses,
+    totalCollected: collected,
+    totalSpent: spent,
+    netBalance: collected - spent,
     transactionCount: transactions.length,
   };
 
@@ -173,12 +157,12 @@ const TransactionsPage = () => {
       globalMutate('transactions/stats'); // Refresh dashboard stats
       globalMutate('transactions/chart-data'); // Refresh dashboard charts
     } catch (error) {
-      console.error("Error saving transaction:", error);
+      console.error("Error saving record:", error);
     }
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this transaction?")) {
+    if (!window.confirm("Are you sure you want to delete this record?")) {
       return;
     }
 
@@ -188,7 +172,7 @@ const TransactionsPage = () => {
       globalMutate('transactions/stats');
       globalMutate('transactions/chart-data');
     } catch (error) {
-      console.error("Error deleting transaction:", error);
+      console.error("Error deleting record:", error);
     }
   };
 
@@ -284,18 +268,18 @@ const TransactionsPage = () => {
   };
 
   const calculateRangeStats = (transactions) => {
-    const rangeIncome = transactions
-      .filter((t) => t.type === "income")
+    const rangeCollected = transactions
+      .filter((t) => t.type === "contribution")
       .reduce((sum, t) => sum + parseFloat(t.amount), 0);
 
-    const rangeExpenses = transactions
+    const rangeSpent = transactions
       .filter((t) => t.type === "expense")
       .reduce((sum, t) => sum + parseFloat(t.amount), 0);
 
     return {
-      totalIncome: rangeIncome,
-      totalExpenses: rangeExpenses,
-      netBalance: rangeIncome - rangeExpenses,
+      totalCollected: rangeCollected,
+      totalSpent: rangeSpent,
+      netBalance: rangeCollected - rangeSpent,
       transactionCount: transactions.length,
     };
   };
@@ -305,7 +289,7 @@ const TransactionsPage = () => {
 
     // SHEET 1: ALL TRANSACTIONS
     const transactionData = [
-      ["TRANSACTION REPORT"],
+      ["FINANCIAL RECORD REPORT"],
       [`Period: ${dateRangeStr}`],
       [
         `Generated: ${new Date().toLocaleDateString("en-US", {
@@ -318,10 +302,10 @@ const TransactionsPage = () => {
         })}`,
       ],
       [
-        `Total Transactions: ${rangeStats.transactionCount} | Income: ${formatCurrency(rangeStats.totalIncome)} | Expenses: ${formatCurrency(rangeStats.totalExpenses)} | Net: ${formatCurrency(rangeStats.netBalance)}`,
+        `Total Records: ${rangeStats.transactionCount} | Collected: ${formatCurrency(rangeStats.totalCollected)} | Spent: ${formatCurrency(rangeStats.totalSpent)} | Remaining: ${formatCurrency(rangeStats.netBalance)}`,
       ],
       [],
-      ["Date", "Type", "Category", "Description", "Amount", "Running Balance"],
+      ["Date", "Type", "Category", "Description", "Contributor/Recipient", "Amount", "Running Balance"],
     ];
 
     let runningBalance = 0;
@@ -331,11 +315,13 @@ const TransactionsPage = () => {
 
     sortedTransactions.forEach((t) => {
       const amount = parseFloat(t.amount);
-      if (t.type === "income") {
+      if (t.type === "contribution") {
         runningBalance += amount;
       } else {
         runningBalance -= amount;
       }
+
+      const entityName = t.type === 'contribution' ? (t.contributor?.name || '') : (t.recipient?.name || '');
 
       transactionData.push([
         new Date(t.date).toLocaleDateString("en-US", {
@@ -346,49 +332,51 @@ const TransactionsPage = () => {
         t.type.toUpperCase(),
         t.category,
         t.description || "",
-        t.type === "income" ? amount.toFixed(2) : `-${amount.toFixed(2)}`,
+        entityName,
+        t.type === "contribution" ? amount.toFixed(2) : `-${amount.toFixed(2)}`,
         runningBalance.toFixed(2),
       ]);
     });
 
     transactionData.push(
       [],
-      ["TOTALS", "", "", "", "", ""],
-      ["Total Income", "", "", "", rangeStats.totalIncome.toFixed(2), ""],
-      ["Total Expenses", "", "", "", rangeStats.totalExpenses.toFixed(2), ""],
-      ["Net Balance", "", "", "", rangeStats.netBalance.toFixed(2), ""]
+      ["TOTALS", "", "", "", "", "", ""],
+      ["Total Collected", "", "", "", "", rangeStats.totalCollected.toFixed(2), ""],
+      ["Total Spent", "", "", "", "", rangeStats.totalSpent.toFixed(2), ""],
+      ["Remaining Balance", "", "", "", "", rangeStats.netBalance.toFixed(2), ""]
     );
 
     const wsTransactions = XLSX.utils.aoa_to_sheet(transactionData);
     wsTransactions["!cols"] = [
       { wch: 15 },
-      { wch: 10 },
+      { wch: 15 },
       { wch: 20 },
       { wch: 40 },
+      { wch: 20 },
       { wch: 15 },
       { wch: 15 },
     ];
-    XLSX.utils.book_append_sheet(wb, wsTransactions, "All Transactions");
+    XLSX.utils.book_append_sheet(wb, wsTransactions, "All Records");
 
-    // SHEET 2: INCOME
-    const incomeTransactions = transactionsToExport.filter(
-      (t) => t.type === "income"
+    // SHEET 2: CONTRIBUTIONS
+    const contributionTransactions = transactionsToExport.filter(
+      (t) => t.type === "contribution"
     );
-    if (incomeTransactions.length > 0) {
-      const incomeData = [
-        ["INCOME TRANSACTIONS"],
+    if (contributionTransactions.length > 0) {
+      const contributionData = [
+        ["CONTRIBUTIONS"],
         [`Period: ${dateRangeStr}`],
         [
-          `Total Income: ${formatCurrency(rangeStats.totalIncome)} | Count: ${incomeTransactions.length}`,
+          `Total Collected: ${formatCurrency(rangeStats.totalCollected)} | Count: ${contributionTransactions.length}`,
         ],
         [],
-        ["Date", "Category", "Description", "Amount"],
+        ["Date", "Category", "Description", "Contributor", "Amount"],
       ];
 
-      incomeTransactions
+      contributionTransactions
         .sort((a, b) => new Date(b.date) - new Date(a.date))
         .forEach((t) => {
-          incomeData.push([
+          contributionData.push([
             new Date(t.date).toLocaleDateString("en-US", {
               year: "numeric",
               month: "short",
@@ -396,20 +384,22 @@ const TransactionsPage = () => {
             }),
             t.category,
             t.description || "",
+            t.contributor?.name || "",
             parseFloat(t.amount).toFixed(2),
           ]);
         });
 
-      incomeData.push([], ["TOTAL", "", "", rangeStats.totalIncome.toFixed(2)]);
+      contributionData.push([], ["TOTAL", "", "", "", rangeStats.totalCollected.toFixed(2)]);
 
-      const wsIncome = XLSX.utils.aoa_to_sheet(incomeData);
-      wsIncome["!cols"] = [
+      const wsContribution = XLSX.utils.aoa_to_sheet(contributionData);
+      wsContribution["!cols"] = [
         { wch: 15 },
         { wch: 20 },
         { wch: 40 },
+        { wch: 20 },
         { wch: 15 },
       ];
-      XLSX.utils.book_append_sheet(wb, wsIncome, "Income");
+      XLSX.utils.book_append_sheet(wb, wsContribution, "Contributions");
     }
 
     // SHEET 3: EXPENSES
@@ -418,13 +408,13 @@ const TransactionsPage = () => {
     );
     if (expenseTransactions.length > 0) {
       const expenseData = [
-        ["EXPENSE TRANSACTIONS"],
+        ["EXPENSES"],
         [`Period: ${dateRangeStr}`],
         [
-          `Total Expenses: ${formatCurrency(rangeStats.totalExpenses)} | Count: ${expenseTransactions.length}`,
+          `Total Spent: ${formatCurrency(rangeStats.totalSpent)} | Count: ${expenseTransactions.length}`,
         ],
         [],
-        ["Date", "Category", "Description", "Amount"],
+        ["Date", "Category", "Description", "Recipient", "Amount"],
       ];
 
       expenseTransactions
@@ -438,13 +428,14 @@ const TransactionsPage = () => {
             }),
             t.category,
             t.description || "",
+            t.recipient?.name || "",
             parseFloat(t.amount).toFixed(2),
           ]);
         });
 
       expenseData.push(
         [],
-        ["TOTAL", "", "", rangeStats.totalExpenses.toFixed(2)]
+        ["TOTAL", "", "", "", rangeStats.totalSpent.toFixed(2)]
       );
 
       const wsExpense = XLSX.utils.aoa_to_sheet(expenseData);
@@ -452,6 +443,7 @@ const TransactionsPage = () => {
         { wch: 15 },
         { wch: 20 },
         { wch: 40 },
+        { wch: 20 },
         { wch: 15 },
       ];
       XLSX.utils.book_append_sheet(wb, wsExpense, "Expenses");
@@ -461,14 +453,14 @@ const TransactionsPage = () => {
     const categoryMap = {};
     transactionsToExport.forEach((t) => {
       if (!categoryMap[t.category]) {
-        categoryMap[t.category] = { income: 0, expense: 0, count: 0, net: 0 };
+        categoryMap[t.category] = { collected: 0, spent: 0, count: 0, net: 0 };
       }
       const amount = parseFloat(t.amount);
-      if (t.type === "income") {
-        categoryMap[t.category].income += amount;
+      if (t.type === "contribution") {
+        categoryMap[t.category].collected += amount;
         categoryMap[t.category].net += amount;
       } else {
-        categoryMap[t.category].expense += amount;
+        categoryMap[t.category].spent += amount;
         categoryMap[t.category].net -= amount;
       }
       categoryMap[t.category].count += 1;
@@ -481,28 +473,28 @@ const TransactionsPage = () => {
       [],
       [
         "Category",
-        "Income",
-        "Expenses",
+        "Collected",
+        "Spent",
         "Net",
-        "Transactions",
-        "Avg per Transaction",
+        "Records",
+        "Avg per Record",
       ],
     ];
 
     Object.entries(categoryMap)
       .sort(
         (a, b) =>
-          Math.abs(b[1].income + b[1].expense) -
-          Math.abs(a[1].income + a[1].expense)
+          Math.abs(b[1].collected + b[1].spent) -
+          Math.abs(a[1].collected + a[1].spent)
       )
       .forEach(([category, data]) => {
         categoryData.push([
           category,
-          data.income.toFixed(2),
-          data.expense.toFixed(2),
+          data.collected.toFixed(2),
+          data.spent.toFixed(2),
           data.net.toFixed(2),
           data.count,
-          ((data.income + data.expense) / data.count).toFixed(2),
+          ((data.collected + data.spent) / data.count).toFixed(2),
         ]);
       });
 
@@ -517,7 +509,7 @@ const TransactionsPage = () => {
     ];
     XLSX.utils.book_append_sheet(wb, wsCategory, "By Category");
 
-    let filename = `Transactions_${dateRangeStr.replace(/\s/g, "_")}`;
+    let filename = `Records_${dateRangeStr.replace(/\s/g, "_")}`;
     if (filters.type) filename += `_${filters.type}`;
     filename += ".xlsx";
 
@@ -527,7 +519,7 @@ const TransactionsPage = () => {
 
   const exportToCSV = (transactionsToExport, dateRangeStr) => {
     const csvContent = [
-      ["Date", "Type", "Category", "Description", "Amount"],
+      ["Date", "Type", "Category", "Description", "Entity", "Amount"],
       ...transactionsToExport
         .sort((a, b) => new Date(b.date) - new Date(a.date))
         .map((t) => [
@@ -535,6 +527,7 @@ const TransactionsPage = () => {
           t.type,
           t.category,
           t.description || "",
+          t.type === 'contribution' ? (t.contributor?.name || '') : (t.recipient?.name || ''),
           t.amount,
         ]),
     ]
@@ -545,7 +538,7 @@ const TransactionsPage = () => {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    let filename = `Transactions_${dateRangeStr.replace(/\s/g, "_")}.csv`;
+    let filename = `Records_${dateRangeStr.replace(/\s/g, "_")}.csv`;
     link.download = filename;
     link.click();
     window.URL.revokeObjectURL(url);
@@ -568,7 +561,7 @@ const TransactionsPage = () => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      let filename = `Transactions_Report_${dateRangeStr.replace(/\s/g, '_')}.pdf`;
+      let filename = `Records_Report_${dateRangeStr.replace(/\s/g, '_')}.pdf`;
       link.download = filename;
       link.click();
       window.URL.revokeObjectURL(url);
@@ -584,7 +577,7 @@ const TransactionsPage = () => {
       const transactionsToExport = getFilteredTransactionsByDate();
 
       if (transactionsToExport.length === 0) {
-        alert("No transactions found in the selected date range.");
+        alert("No records found in the selected date range.");
         return;
       }
 
@@ -624,7 +617,7 @@ const TransactionsPage = () => {
 
       setShowExportModal(false);
       alert(
-        `✅ Successfully exported ${rangeStats.transactionCount} transactions!\n\nPeriod: ${dateRangeStr}\nFormat: ${exportFormat.toUpperCase()}\nFile: ${filename}`
+        `✅ Successfully exported ${rangeStats.transactionCount} records!\n\nPeriod: ${dateRangeStr}\nFormat: ${exportFormat.toUpperCase()}\nFile: ${filename}`
       );
     } catch (error) {
       console.error("Error exporting data:", error);
@@ -652,10 +645,10 @@ const TransactionsPage = () => {
           >
             <div>
               <h1 className="text-xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-2">
-                All Transactions 📊
+                Financial Records 📊
               </h1>
               <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
-                Manage and analyze your financial transactions
+                Manage and analyze your organization's contributions and expenses
               </p>
             </div>
 
@@ -666,17 +659,17 @@ const TransactionsPage = () => {
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" aria-hidden="true" />
                 <input
                   type="text"
-                  placeholder="Search transactions..."
+                  placeholder="Search records..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  aria-label="Search transactions"
+                  aria-label="Search records"
                   className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 text-sm sm:text-base"
                 />
               </div>
 
               {/* Sort Dropdown */}
               <div className="relative min-w-[180px]">
-                <label htmlFor="sort-select" className="sr-only">Sort transactions</label>
+                <label htmlFor="sort-select" className="sr-only">Sort records</label>
                 <SortAsc className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" aria-hidden="true" />
                 <select
                   id="sort-select"
@@ -686,7 +679,7 @@ const TransactionsPage = () => {
                     setSortBy(field);
                     setSortOrder(order);
                   }}
-                  aria-label="Sort transactions"
+                  aria-label="Sort records"
                   className="w-full pl-10 pr-8 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer text-sm sm:text-base"
                 >
                   <option value="date-desc">Date (Newest)</option>
@@ -706,7 +699,7 @@ const TransactionsPage = () => {
                   id="time-filter-transactions"
                   value={timeFilter}
                   onChange={(e) => setTimeFilter(e.target.value)}
-                  aria-label="Filter transactions by time period"
+                  aria-label="Filter records by time period"
                   className="w-full pl-10 pr-8 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer text-sm sm:text-base"
                 >
                   <option value="thisWeek">This Week</option>
@@ -733,7 +726,7 @@ const TransactionsPage = () => {
                   onClick={refreshData}
                   disabled={isRefreshing}
                   className="p-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
-                  aria-label="Refresh transactions"
+                  aria-label="Refresh records"
                 >
                   <RefreshCw
                     className={`h-5 w-5 ${isRefreshing ? "animate-spin" : ""}`}
@@ -796,7 +789,7 @@ const TransactionsPage = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div>
                     <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Transaction Type
+                      Record Type
                     </label>
                     <select
                       value={filters.type}
@@ -804,7 +797,7 @@ const TransactionsPage = () => {
                       className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm"
                     >
                       <option value="">All Types</option>
-                      <option value="income">Income</option>
+                      <option value="contribution">Contribution</option>
                       <option value="expense">Expense</option>
                     </select>
                   </div>
@@ -819,7 +812,7 @@ const TransactionsPage = () => {
                       className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm"
                     >
                       <option value="">All Categories</option>
-                      {categories.map((cat) => (
+                      {ALL_CATEGORIES.map((cat) => (
                         <option key={cat} value={cat}>
                           {cat}
                         </option>
@@ -893,28 +886,28 @@ const TransactionsPage = () => {
             className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6"
           >
             <StatsCard
-              title="Total Income"
-              value={stats.totalIncome}
+              title="Total Collected"
+              value={stats.totalCollected}
               icon={TrendingUp}
               color="green"
-              change="+12.5%"
+              change=""
             />
             <StatsCard
-              title="Total Expenses"
-              value={stats.totalExpenses}
+              title="Total Spent"
+              value={stats.totalSpent}
               icon={TrendingDown}
               color="red"
-              change="-8.2%"
+              change=""
             />
             <StatsCard
-              title="Net Balance"
+              title="Remaining Balance"
               value={stats.netBalance}
               icon={Wallet}
               color={stats.netBalance >= 0 ? "green" : "red"}
-              change={stats.netBalance >= 0 ? "+4.3%" : "-4.3%"}
+              change=""
             />
             <StatsCard
-              title="Total Transactions"
+              title="Total Records"
               value={stats.transactionCount}
               icon={BarChart3}
               color="blue"
@@ -961,7 +954,7 @@ const TransactionsPage = () => {
                       </div>
                       <div>
                         <h2 className="text-lg sm:text-2xl font-bold">
-                          Export Transactions
+                          Export Records
                         </h2>
                         <p className="text-green-100 text-xs sm:text-sm">
                           Choose format and date range
@@ -992,18 +985,18 @@ const TransactionsPage = () => {
                       </div>
                       <div>
                         <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
-                          Income
+                          Collected
                         </p>
                         <p className="text-base sm:text-lg font-bold text-green-600">
-                          {formatCurrency(stats.totalIncome)}
+                          {formatCurrency(stats.totalCollected)}
                         </p>
                       </div>
                       <div>
                         <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
-                          Expenses
+                          Spent
                         </p>
                         <p className="text-base sm:text-lg font-bold text-red-600">
-                          {formatCurrency(stats.totalExpenses)}
+                          {formatCurrency(stats.totalSpent)}
                         </p>
                       </div>
                       <div>

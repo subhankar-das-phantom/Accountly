@@ -4,7 +4,7 @@ import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recha
 import { useCurrency } from '../context/CurrencyContext';
 import { formatCurrency } from '../utils/currency';
 
-const Chart = ({ data, title = "Expense Breakdown" }) => {
+const Chart = ({ data, title = "Spent Categories Breakdown" }) => {
   const { currency } = useCurrency();
   
   // Modern gradient colors for a beautiful look

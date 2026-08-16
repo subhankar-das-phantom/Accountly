@@ -10,8 +10,11 @@ import {
   Save,
   Plus,
   AlertCircle,
-  X
+  X,
+  User,
+  Store
 } from 'lucide-react';
+import { CONTRIBUTION_CATEGORIES, EXPENSE_CATEGORIES } from '../constants/financeCategories';
 
 const TransactionForm = ({ onSubmit, transaction, isLoading = false, onClose }) => {
   const [formData, setFormData] = useState({
@@ -20,28 +23,24 @@ const TransactionForm = ({ onSubmit, transaction, isLoading = false, onClose }) 
     customCategory: '',
     amount: '',
     date: '',
-    description: ''
+    description: '',
+    contributorName: '',
+    recipientName: ''
   });
   const [errors, setErrors] = useState({});
   const [isSubmitted, setIsSubmitted] = useState(false);
 
-  // Predefined categories
+  // Predefined categories from centralized constants
   const categories = {
-    expense: [
-      'Food & Dining', 'Transportation', 'Shopping', 'Entertainment', 
-      'Bills & Utilities', 'Healthcare', 'Education', 'Travel', 'Other'
-    ],
-    income: [
-      'Salary', 'Freelance', 'Business', 'Investments', 
-      'Rental', 'Gifts', 'Bonus', 'Other'
-    ]
+    expense: EXPENSE_CATEGORIES,
+    contribution: CONTRIBUTION_CATEGORIES
   };
 
   useEffect(() => {
     if (transaction) {
       const type = transaction.type || 'expense';
       const category = transaction.category || '';
-      const isCustom = category && !categories[type].includes(category) && category !== 'Other';
+      const isCustom = category && !categories[type]?.includes(category) && category !== 'Other';
       
       setFormData({
         type: type,
@@ -49,7 +48,9 @@ const TransactionForm = ({ onSubmit, transaction, isLoading = false, onClose }) 
         customCategory: isCustom ? category : '',
         amount: transaction.amount || '',
         date: transaction.date ? transaction.date.substring(0, 10) : '',
-        description: transaction.description || ''
+        description: transaction.description || '',
+        contributorName: transaction.contributor?.name || '',
+        recipientName: transaction.recipient?.name || ''
       });
     }
   }, [transaction]);
@@ -88,11 +89,21 @@ const TransactionForm = ({ onSubmit, transaction, isLoading = false, onClose }) 
     }
 
     try {
-      await onSubmit({
-        ...formData,
+      const submitData = {
+        type: formData.type,
         category: formData.category === 'Other' ? formData.customCategory : formData.category,
-        amount: parseFloat(formData.amount)
-      });
+        amount: parseFloat(formData.amount),
+        date: formData.date,
+        description: formData.description
+      };
+
+      if (formData.type === 'contribution' && formData.contributorName) {
+        submitData.contributor = { name: formData.contributorName };
+      } else if (formData.type === 'expense' && formData.recipientName) {
+        submitData.recipient = { name: formData.recipientName };
+      }
+
+      await onSubmit(submitData);
       
       if (!transaction) {
         setFormData({
@@ -101,7 +112,9 @@ const TransactionForm = ({ onSubmit, transaction, isLoading = false, onClose }) 
           customCategory: '',
           amount: '',
           date: '',
-          description: ''
+          description: '',
+          contributorName: '',
+          recipientName: ''
         });
         setIsSubmitted(false);
       }
@@ -137,7 +150,7 @@ const TransactionForm = ({ onSubmit, transaction, isLoading = false, onClose }) 
       >
         <div>
           <h2 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white mb-2">
-            {transaction ? 'Edit Transaction' : 'Add New Transaction'}
+            {transaction ? 'Edit Financial Record' : 'Add Financial Record'}
           </h2>
           <div className="w-[185px] h-1 bg-gradient-to-r from-blue-600 to-cyan-500 rounded-full" />
         </div>
@@ -162,16 +175,18 @@ const TransactionForm = ({ onSubmit, transaction, isLoading = false, onClose }) 
           transition={{ delay: 0.3 }}
         >
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-            Transaction Type
+            Record Type
           </label>
           <div className="grid grid-cols-2 gap-4">
-            {['expense', 'income'].map((type) => (
+            {['expense', 'contribution'].map((type) => (
               <motion.button
                 key={type}
                 type="button"
                 onClick={() => {
                   handleChange('type', type);
                   handleChange('category', ''); // Reset category when type changes
+                  handleChange('contributorName', '');
+                  handleChange('recipientName', '');
                 }}
                 variants={buttonVariants}
                 initial="idle"
@@ -222,9 +237,10 @@ const TransactionForm = ({ onSubmit, transaction, isLoading = false, onClose }) 
               } focus:ring-2 focus:outline-none`}
             >
               <option value="">Select a category</option>
-              {categories[formData.type].map((cat) => (
+              {categories[formData.type]?.map((cat) => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
+              <option value="Other">Other</option>
             </motion.select>
           </FormField>
 
@@ -246,7 +262,7 @@ const TransactionForm = ({ onSubmit, transaction, isLoading = false, onClose }) 
                   type="text"
                   value={formData.customCategory}
                   onChange={(e) => handleChange('customCategory', e.target.value)}
-                  placeholder="Enter custom reason"
+                  placeholder="Enter custom category"
                   className={`w-full pl-10 pr-4 py-3 rounded-xl border transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-white ${
                     errors.customCategory && isSubmitted
                       ? 'border-red-400 focus:border-red-500 focus:ring-red-200'
@@ -255,6 +271,57 @@ const TransactionForm = ({ onSubmit, transaction, isLoading = false, onClose }) 
                 />
               </FormField>
             </motion.div>
+          )}
+        </motion.div>
+
+        {/* Dynamic Contributor/Recipient Field */}
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.45 }}
+        >
+          {formData.type === 'contribution' ? (
+            <FormField
+              label="Contributor Name (Optional)"
+              icon={User}
+              error={errors.contributorName}
+              isSubmitted={isSubmitted}
+            >
+              <motion.input
+                variants={inputVariants}
+                whileFocus="focus"
+                type="text"
+                value={formData.contributorName}
+                onChange={(e) => handleChange('contributorName', e.target.value)}
+                placeholder="e.g. John Doe or ACME Corp"
+                className={`w-full pl-10 pr-4 py-3 rounded-xl border transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-white ${
+                  errors.contributorName && isSubmitted
+                    ? 'border-red-400 focus:border-red-500 focus:ring-red-200'
+                    : 'border-gray-200 dark:border-gray-700 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-800'
+                } focus:ring-2 focus:outline-none`}
+              />
+            </FormField>
+          ) : (
+            <FormField
+              label="Recipient / Vendor (Optional)"
+              icon={Store}
+              error={errors.recipientName}
+              isSubmitted={isSubmitted}
+            >
+              <motion.input
+                variants={inputVariants}
+                whileFocus="focus"
+                type="text"
+                value={formData.recipientName}
+                onChange={(e) => handleChange('recipientName', e.target.value)}
+                placeholder="e.g. Catering Co or Venue"
+                className={`w-full pl-10 pr-4 py-3 rounded-xl border transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-white ${
+                  errors.recipientName && isSubmitted
+                    ? 'border-red-400 focus:border-red-500 focus:ring-red-200'
+                    : 'border-gray-200 dark:border-gray-700 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-800'
+                } focus:ring-2 focus:outline-none`}
+              />
+            </FormField>
           )}
         </motion.div>
 
@@ -332,7 +399,7 @@ const TransactionForm = ({ onSubmit, transaction, isLoading = false, onClose }) 
               whileFocus="focus"
               value={formData.description}
               onChange={(e) => handleChange('description', e.target.value)}
-              placeholder="Enter transaction details..."
+              placeholder="Enter record details..."
               rows="3"
               className={`w-full pl-10 pr-4 py-3 rounded-xl border transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-white resize-none ${
                 errors.description && isSubmitted
@@ -376,7 +443,7 @@ const TransactionForm = ({ onSubmit, transaction, isLoading = false, onClose }) 
                 <Plus className="h-5 w-5" />
               )}
               <span>
-                {isLoading ? 'Processing...' : transaction ? 'Update Transaction' : 'Add Transaction'}
+                {isLoading ? 'Processing...' : transaction ? 'Update Record' : 'Add Record'}
               </span>
             </div>
           </motion.button>

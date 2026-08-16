@@ -91,13 +91,17 @@ const getTransactions = async (organizationId, queryParams) => {
 };
 
 const createTransaction = async (organizationId, userId, data) => {
-  const { type, category, amount, date, description } = data;
+  const { type, category, amount, date, description, contributor, recipient, status } = data;
+  
   const newTransaction = new Transaction({
     type,
     category,
     amount,
     date,
     description,
+    contributor,
+    recipient,
+    status,
     user: userId, // temporarily preserved
     organizationId: organizationId,
   });
@@ -108,7 +112,7 @@ const createTransaction = async (organizationId, userId, data) => {
 };
 
 const updateTransaction = async (organizationId, transactionId, data) => {
-  const { type, category, amount, date, description } = data;
+  const { type, category, amount, date, description, contributor, recipient, status } = data;
   // Ensure the transaction belongs to the organization
   const updatedTransaction = await Transaction.findOneAndUpdate(
     { _id: transactionId, organizationId: organizationId },
@@ -118,6 +122,9 @@ const updateTransaction = async (organizationId, transactionId, data) => {
       amount,
       date,
       description,
+      contributor,
+      recipient,
+      status
     },
     { new: true }
   );

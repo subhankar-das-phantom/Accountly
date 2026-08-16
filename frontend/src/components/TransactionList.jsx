@@ -10,6 +10,8 @@ import {
   TrendingDown,
   AlertCircle,
   Loader2,
+  User,
+  Store
 } from "lucide-react";
 import { useCurrency } from "../context/CurrencyContext";
 import { formatCurrency } from "../utils/currency";
@@ -57,12 +59,12 @@ const TransactionRow = memo(({ transaction, onEdit, onDelete }) => {
         <div className="flex items-start sm:items-center space-x-4 flex-1 min-w-0 w-full">
           <div
             className={`p-2 rounded-lg flex-shrink-0 ${
-              transaction.type === "income"
+              transaction.type === "contribution"
                 ? "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
                 : "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
             }`}
           >
-            {transaction.type === "income" ? (
+            {transaction.type === "contribution" ? (
               <TrendingUp className="h-5 w-5" />
             ) : (
               <TrendingDown className="h-5 w-5" />
@@ -76,12 +78,12 @@ const TransactionRow = memo(({ transaction, onEdit, onDelete }) => {
               </h3>
               <span
                 className={`text-base sm:text-xl font-bold whitespace-nowrap flex-shrink-0 ${
-                  transaction.type === "income"
+                  transaction.type === "contribution"
                     ? "text-green-600 dark:text-green-400"
                     : "text-red-600 dark:text-red-400"
                 }`}
               >
-                {transaction.type === "income" ? "+" : "-"}
+                {transaction.type === "contribution" ? "+" : "-"}
                 {formatCurrency(transaction.amount, currency.locale, currency.code)}
               </span>
             </div>
@@ -91,6 +93,21 @@ const TransactionRow = memo(({ transaction, onEdit, onDelete }) => {
                 <Tag className="h-4 w-4 flex-shrink-0" />
                 <span className="truncate">{transaction.category}</span>
               </div>
+              
+              {transaction.type === 'contribution' && transaction.contributor?.name && (
+                <div className="flex items-center space-x-1">
+                  <User className="h-4 w-4 flex-shrink-0" />
+                  <span className="truncate">{transaction.contributor.name}</span>
+                </div>
+              )}
+              
+              {transaction.type === 'expense' && transaction.recipient?.name && (
+                <div className="flex items-center space-x-1">
+                  <Store className="h-4 w-4 flex-shrink-0" />
+                  <span className="truncate">{transaction.recipient.name}</span>
+                </div>
+              )}
+
               <div className="flex items-center space-x-1">
                 <Calendar className="h-4 w-4 flex-shrink-0" />
                 <span>{formatDate(transaction.date)}</span>
@@ -117,7 +134,7 @@ const TransactionRow = memo(({ transaction, onEdit, onDelete }) => {
                   onEdit(transaction);
                 }}
                 className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors duration-200"
-                title="Edit transaction"
+                title="Edit record"
               >
                 <Edit3 className="h-4 w-4" />
               </motion.button>
@@ -129,7 +146,7 @@ const TransactionRow = memo(({ transaction, onEdit, onDelete }) => {
                   onDelete(transaction._id);
                 }}
                 className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors duration-200"
-                title="Delete transaction"
+                title="Delete record"
               >
                 <Trash2 className="h-4 w-4" />
               </motion.button>
@@ -216,12 +233,12 @@ const TransactionList = ({
         >
           <div>
             <h2 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white mb-2">
-              Recent Transactions
+              Recent Records
             </h2>
             <div className="w-[185px] h-1 bg-gradient-to-r from-blue-600 to-cyan-500 rounded-full" />
           </div>
           <div className="text-sm text-gray-500 dark:text-gray-400">
-            {transactions.length} {hasMore ? "+ " : ""}transactions
+            {transactions.length} {hasMore ? "+ " : ""}records
           </div>
         </motion.div>
       </div>
@@ -235,7 +252,7 @@ const TransactionList = ({
             className="flex flex-col items-center justify-center py-12 text-gray-500 dark:text-gray-400"
           >
             <AlertCircle className="h-12 w-12 mb-4 opacity-50" />
-            <p className="text-lg font-medium mb-2">No transactions found</p>
+            <p className="text-lg font-medium mb-2">No records found</p>
             <p className="text-sm text-center px-4">
               Try adjusting your filters or search terms
             </p>
@@ -277,7 +294,7 @@ const TransactionList = ({
                         <div className="flex items-center justify-center py-8">
                           <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
                           <span className="ml-3 text-sm text-gray-600 dark:text-gray-400">
-                            Loading more transactions...
+                            Loading more records...
                           </span>
                         </div>
                       ) : null

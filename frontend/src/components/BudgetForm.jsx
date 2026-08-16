@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Target, Coins, Calendar, Tag, Save, Loader, AlertCircle } from 'lucide-react';
 import api from '../services/api';
 import { AuthContext } from '../context/AuthContext';
+import { EXPENSE_CATEGORIES } from '../constants/financeCategories';
 
 const BudgetForm = ({ onClose, onSubmit, goal = null }) => {
   const [formData, setFormData] = useState({
@@ -136,7 +137,7 @@ const BudgetForm = ({ onClose, onSubmit, goal = null }) => {
                 {goal ? 'Edit Budget Goal' : 'Set Budget Goal'}
               </h2>
               <p className="text-green-100 text-sm">
-                Plan your monthly spending limits
+                Plan your monthly expense limits
               </p>
             </div>
           </div>
@@ -170,17 +171,11 @@ const BudgetForm = ({ onClose, onSubmit, goal = null }) => {
               } focus:ring-4 focus:outline-none cursor-pointer`}
             >
               <option value="">Select a category</option>
-              {[
-                'Food & Dining', 'Transportation', 'Shopping', 'Entertainment', 
-                'Bills & Utilities', 'Healthcare', 'Education', 'Travel', 'Other'
-              ].map((cat) => (
+              {EXPENSE_CATEGORIES.map((cat) => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
               {availableCategories
-                .filter(cat => ![
-                  'Food & Dining', 'Transportation', 'Shopping', 'Entertainment', 
-                  'Bills & Utilities', 'Healthcare', 'Education', 'Travel', 'Other'
-                ].includes(cat.category))
+                .filter(cat => !EXPENSE_CATEGORIES.includes(cat.category))
                 .map((cat) => (
                   <option key={cat.category} value={cat.category}>{cat.category}</option>
               ))}

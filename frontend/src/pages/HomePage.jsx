@@ -41,12 +41,12 @@ const HomePage = () => {
   const allTransactions = Array.isArray(allTransactionsRaw?.transactions || allTransactionsRaw) ? (allTransactionsRaw?.transactions || allTransactionsRaw) : [];
   const recentTransactions = allTransactions.slice(0, 5);
   const stats = statsRaw || {
-    totalIncomeAllTime: 0,
-    totalExpensesAllTime: 0,
+    totalCollectedAllTime: 0,
+    totalSpentAllTime: 0,
     netBalanceAllTime: 0,
     transactionCount: 0,
-    currentMonth: { income: 0, expenses: 0, netBalance: 0 },
-    previousMonth: { income: 0, expenses: 0, netBalance: 0 },
+    currentMonth: { collected: 0, spent: 0, netBalance: 0 },
+    previousMonth: { collected: 0, spent: 0, netBalance: 0 },
   };
   const chartData = chartDataRaw || [];
 
@@ -191,19 +191,19 @@ const HomePage = () => {
   };
 
   // Calculate changes for display (based on current month vs previous month from backend)
-  const incomeChange =
-    stats.currentMonth && stats.previousMonth
+  const collectedChange =
+    stats.currentMonth && stats.previousMonth && stats.currentMonth.collected !== undefined
       ? calculatePercentageChange(
-          stats.currentMonth.income,
-          stats.previousMonth.income
+          stats.currentMonth.collected,
+          stats.previousMonth.collected
         )
       : "N/A";
 
-  const expensesChange =
-    stats.currentMonth && stats.previousMonth
+  const spentChange =
+    stats.currentMonth && stats.previousMonth && stats.currentMonth.spent !== undefined
       ? calculatePercentageChange(
-          stats.currentMonth.expenses,
-          stats.previousMonth.expenses
+          stats.currentMonth.spent,
+          stats.previousMonth.spent
         )
       : "N/A";
 
@@ -241,7 +241,7 @@ const HomePage = () => {
       setShowAddForm(false);
       await refreshData();
     } catch (error) {
-      console.error("Error saving transaction:", error);
+      console.error("Error saving record:", error);
     }
   };
 
@@ -257,7 +257,7 @@ const HomePage = () => {
       await api.delete(`transactions/${id}`);
       await refreshData();
     } catch (error) {
-      console.error("Error deleting transaction:", error);
+      console.error("Error deleting record:", error);
     }
   };
 
@@ -298,18 +298,18 @@ const HomePage = () => {
         break;
     }
 
-    const income = filteredTransactions
-      .filter((t) => t.type === "income")
+    const collected = filteredTransactions
+      .filter((t) => t.type === "contribution")
       .reduce((sum, t) => sum + parseFloat(t.amount), 0);
 
-    const expenses = filteredTransactions
+    const spent = filteredTransactions
       .filter((t) => t.type === "expense")
       .reduce((sum, t) => sum + parseFloat(t.amount), 0);
 
     return {
-      income,
-      expenses,
-      netBalance: income - expenses,
+      collected,
+      spent,
+      netBalance: collected - spent,
       count: filteredTransactions.length,
     };
   };
@@ -367,7 +367,7 @@ const HomePage = () => {
                 Welcome back, {user?.username}! 👋
               </h1>
               <p className="text-gray-600 dark:text-gray-400">
-                Here's your financial overview for today
+                Here's your organization's financial overview
               </p>
             </div>
 
@@ -378,7 +378,7 @@ const HomePage = () => {
                 id="time-filter"
                 value={timeFilter}
                 onChange={(e) => setTimeFilter(e.target.value)}
-                aria-label="Filter transactions by time period"
+                aria-label="Filter records by time period"
                 className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
               >
                 <option value="thisWeek">This Week</option>
@@ -408,7 +408,7 @@ const HomePage = () => {
                 }}
                 icon={Plus}
               >
-                <span className="hidden sm:inline">Add Transaction</span>
+                <span className="hidden sm:inline">Add Record</span>
                 <span className="sm:hidden">Add</span>
               </Button>
             </div>
@@ -420,28 +420,28 @@ const HomePage = () => {
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
           >
             <StatsCard
-              title="Total Income"
-              value={filteredStats.income}
+              title="Total Collected"
+              value={filteredStats.collected}
               icon={TrendingUp}
               color="green"
-              change={incomeChange}
+              change={collectedChange}
             />
             <StatsCard
-              title="Total Expenses"
-              value={filteredStats.expenses}
+              title="Total Spent"
+              value={filteredStats.spent}
               icon={TrendingDown}
               color="red"
-              change={expensesChange}
+              change={spentChange}
             />
             <StatsCard
-              title="Net Balance"
+              title="Remaining Balance"
               value={filteredStats.netBalance}
               icon={Wallet}
               color={filteredStats.netBalance >= 0 ? "green" : "red"}
               change={netBalanceChange}
             />
             <StatsCard
-              title="Transactions"
+              title="Total Records"
               value={filteredStats.count}
               icon={BarChart3}
               color="blue"
@@ -524,7 +524,7 @@ const HomePage = () => {
                     console.error("Error downloading PDF report:", error);
 
                     if (error.response?.status === 404) {
-                      alert("No transactions found for report generation");
+                      alert("No records found for report generation");
                     } else {
                       alert("Failed to generate PDF report. Please try again.");
                     }

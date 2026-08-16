@@ -44,46 +44,47 @@ const getStats = async (organizationId) => {
   });
 
   // Calculate all-time stats
-  const totalIncomeAllTime = transactions
-    .filter(t => t.type === 'income')
-    .reduce((sum, t) => sum + parseFloat(t.amount), 0);
-  const totalExpensesAllTime = transactions
-    .filter(t => t.type === 'expense')
-    .reduce((sum, t) => sum + parseFloat(t.amount), 0);
-  const netBalanceAllTime = totalIncomeAllTime - totalExpensesAllTime;
+  const contributions = transactions.filter(t => t.type === 'contribution');
+  const expenses = transactions.filter(t => t.type === 'expense');
+
+  const totalCollected = contributions.reduce((sum, t) => sum + parseFloat(t.amount), 0);
+  const totalSpent = expenses.reduce((sum, t) => sum + parseFloat(t.amount), 0);
+  const remainingBalance = totalCollected - totalSpent;
 
   // Calculate current month stats
-  const currentMonthIncome = currentMonthTransactions
-    .filter(t => t.type === 'income')
+  const currentMonthCollected = currentMonthTransactions
+    .filter(t => t.type === 'contribution')
     .reduce((sum, t) => sum + parseFloat(t.amount), 0);
-  const currentMonthExpenses = currentMonthTransactions
+  const currentMonthSpent = currentMonthTransactions
     .filter(t => t.type === 'expense')
     .reduce((sum, t) => sum + parseFloat(t.amount), 0);
-  const currentMonthNetBalance = currentMonthIncome - currentMonthExpenses;
+  const currentMonthRemaining = currentMonthCollected - currentMonthSpent;
 
   // Calculate previous month stats
-  const previousMonthIncome = previousMonthTransactions
-    .filter(t => t.type === 'income')
+  const previousMonthCollected = previousMonthTransactions
+    .filter(t => t.type === 'contribution')
     .reduce((sum, t) => sum + parseFloat(t.amount), 0);
-  const previousMonthExpenses = previousMonthTransactions
+  const previousMonthSpent = previousMonthTransactions
     .filter(t => t.type === 'expense')
     .reduce((sum, t) => sum + parseFloat(t.amount), 0);
-  const previousMonthNetBalance = previousMonthIncome - previousMonthExpenses;
+  const previousMonthRemaining = previousMonthCollected - previousMonthSpent;
 
   const response = {
-    totalIncomeAllTime,
-    totalExpensesAllTime,
-    netBalanceAllTime,
+    totalCollected,
+    totalSpent,
+    remainingBalance,
+    contributionCount: contributions.length,
+    expenseCount: expenses.length,
     transactionCount: transactions.length,
     currentMonth: {
-      income: currentMonthIncome,
-      expenses: currentMonthExpenses,
-      netBalance: currentMonthNetBalance,
+      collected: currentMonthCollected,
+      spent: currentMonthSpent,
+      remainingBalance: currentMonthRemaining,
     },
     previousMonth: {
-      income: previousMonthIncome,
-      expenses: previousMonthExpenses,
-      netBalance: previousMonthNetBalance,
+      collected: previousMonthCollected,
+      spent: previousMonthSpent,
+      remainingBalance: previousMonthRemaining,
     },
   };
 
@@ -128,16 +129,16 @@ const getAnalytics = async (organizationId) => {
   if (transactions.length === 0) {
     const emptyAnalytics = {
       periods: {
-        allTime: { income: 0, expense: 0, netBalance: 0, count: 0, avgTransaction: 0, savingsRate: 0 },
-        thisMonth: { income: 0, expense: 0, netBalance: 0, count: 0, avgTransaction: 0, savingsRate: 0 },
-        lastMonth: { income: 0, expense: 0, netBalance: 0, count: 0, avgTransaction: 0, savingsRate: 0 },
-        thisYear: { income: 0, expense: 0, netBalance: 0, count: 0, avgTransaction: 0, savingsRate: 0 }
+        allTime: { collected: 0, spent: 0, remainingBalance: 0, count: 0, avgTransaction: 0, retentionRate: 0 },
+        thisMonth: { collected: 0, spent: 0, remainingBalance: 0, count: 0, avgTransaction: 0, retentionRate: 0 },
+        lastMonth: { collected: 0, spent: 0, remainingBalance: 0, count: 0, avgTransaction: 0, retentionRate: 0 },
+        thisYear: { collected: 0, spent: 0, remainingBalance: 0, count: 0, avgTransaction: 0, retentionRate: 0 }
       },
       categoryBreakdown: {},
       monthlyTrends: [],
       topExpenseCategories: [],
-      topIncomeCategories: [],
-      insights: ['Start adding transactions to see insights!'],
+      topContributionCategories: [],
+      insights: ['Start adding financial records to see insights!'],
       reportDate: new Date().toISOString(),
       totalTransactions: 0
     };
@@ -189,9 +190,10 @@ function calculateFinancialStats(transactions) {
   const categoryBreakdown = {};
   transactions.forEach(t => {
     if (!categoryBreakdown[t.category]) {
-      categoryBreakdown[t.category] = { income: 0, expense: 0, count: 0 };
+      categoryBreakdown[t.category] = { collected: 0, spent: 0, count: 0 };
     }
-    categoryBreakdown[t.category][t.type] += parseFloat(t.amount);
+    if (t.type === 'contribution') categoryBreakdown[t.category].collected += parseFloat(t.amount);
+    if (t.type === 'expense') categoryBreakdown[t.category].spent += parseFloat(t.amount);
     categoryBreakdown[t.category].count += 1;
   });
   
@@ -215,13 +217,13 @@ function calculateFinancialStats(transactions) {
   
   // Top categories
   const topExpenseCategories = Object.entries(categoryBreakdown)
-    .map(([cat, data]) => ({ category: cat, amount: data.expense, count: data.count }))
+    .map(([cat, data]) => ({ category: cat, amount: data.spent, count: data.count }))
     .filter(item => item.amount > 0)
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 5);
     
-  const topIncomeCategories = Object.entries(categoryBreakdown)
-    .map(([cat, data]) => ({ category: cat, amount: data.income, count: data.count }))
+  const topContributionCategories = Object.entries(categoryBreakdown)
+    .map(([cat, data]) => ({ category: cat, amount: data.collected, count: data.count }))
     .filter(item => item.amount > 0)
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 5);
@@ -234,7 +236,7 @@ function calculateFinancialStats(transactions) {
     categoryBreakdown,
     monthlyTrends,
     topExpenseCategories,
-    topIncomeCategories,
+    topContributionCategories,
     insights,
     reportDate: new Date().toISOString(),
     totalTransactions: transactions.length
@@ -242,21 +244,21 @@ function calculateFinancialStats(transactions) {
 }
 
 function calculatePeriodStats(transactions) {
-  const income = transactions
-    .filter(t => t.type === 'income')
+  const collected = transactions
+    .filter(t => t.type === 'contribution')
     .reduce((sum, t) => sum + parseFloat(t.amount), 0);
   
-  const expense = transactions
+  const spent = transactions
     .filter(t => t.type === 'expense')
     .reduce((sum, t) => sum + parseFloat(t.amount), 0);
   
   return {
-    income,
-    expense,
-    netBalance: income - expense,
+    collected,
+    spent,
+    remainingBalance: collected - spent,
     count: transactions.length,
-    avgTransaction: transactions.length > 0 ? (income + expense) / transactions.length : 0,
-    savingsRate: income > 0 ? ((income - expense) / income * 100) : 0
+    avgTransaction: transactions.length > 0 ? (collected + spent) / transactions.length : 0,
+    retentionRate: collected > 0 ? ((collected - spent) / collected * 100) : 0
   };
 }
 
@@ -265,22 +267,22 @@ function calculateFinancialInsights(periods) {
   
   // Month-over-month analysis
   if (periods.thisMonth.count > 0 && periods.lastMonth.count > 0) {
-    const incomeChange = ((periods.thisMonth.income - periods.lastMonth.income) / periods.lastMonth.income * 100);
-    const expenseChange = ((periods.thisMonth.expense - periods.lastMonth.expense) / periods.lastMonth.expense * 100);
+    const collectedChange = ((periods.thisMonth.collected - periods.lastMonth.collected) / periods.lastMonth.collected * 100);
+    const spentChange = ((periods.thisMonth.spent - periods.lastMonth.spent) / periods.lastMonth.spent * 100);
     
-    insights.push(`Income ${incomeChange > 0 ? 'increased' : 'decreased'} by ${Math.abs(incomeChange).toFixed(1)}% vs last month`);
-    insights.push(`Expenses ${expenseChange > 0 ? 'increased' : 'decreased'} by ${Math.abs(expenseChange).toFixed(1)}% vs last month`);
+    insights.push(`Contributions ${collectedChange > 0 ? 'increased' : 'decreased'} by ${Math.abs(collectedChange).toFixed(1)}% vs last month`);
+    insights.push(`Expenses ${spentChange > 0 ? 'increased' : 'decreased'} by ${Math.abs(spentChange).toFixed(1)}% vs last month`);
   }
   
-  // Savings rate analysis
-  if (periods.thisMonth.savingsRate > 20) {
-    insights.push('Excellent savings rate this month (>20%)');
-  } else if (periods.thisMonth.savingsRate > 10) {
-    insights.push('Good savings rate this month (10-20%)');
-  } else if (periods.thisMonth.savingsRate > 0) {
-    insights.push('Positive savings this month (<10%)');
+  // Retention rate analysis (replacement for savings rate)
+  if (periods.thisMonth.retentionRate > 20) {
+    insights.push('Excellent fund retention this month (>20%)');
+  } else if (periods.thisMonth.retentionRate > 10) {
+    insights.push('Good fund retention this month (10-20%)');
+  } else if (periods.thisMonth.retentionRate > 0) {
+    insights.push('Positive fund retention this month (<10%)');
   } else {
-    insights.push('Spending exceeded income this month - consider budget review');
+    insights.push('Spending exceeded contributions this month');
   }
   
   return insights;

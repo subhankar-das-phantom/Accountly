@@ -101,8 +101,8 @@ const AnalyticsPage = () => {
     const data = monthlyTrendsRaw.slice(-count);
     return data.map((d) => ({
       ...d,
-      income: Number(d.income || 0),
-      expense: Number(d.expense || 0),
+      collected: Number(d.collected || 0),
+      spent: Number(d.spent || 0),
       netBalance: Number(d.netBalance || 0),
     }));
   }, [monthlyTrendsRaw, timeframe]);
@@ -156,7 +156,7 @@ const AnalyticsPage = () => {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pt-24 px-6 text-center">
         <h1 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white">No analytics yet</h1>
-        <p className="text-gray-600 dark:text-gray-400">Add transactions to see insights.</p>
+        <p className="text-gray-600 dark:text-gray-400">Add records to see insights.</p>
         <button
           onClick={() => navigate('/')}
           className="mt-4 inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
@@ -238,8 +238,8 @@ const AnalyticsPage = () => {
 
           {/* KPI Cards */}
           <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <AnalyticsCard icon={TrendingUp} title="This Month Income" value={periods.thisMonth.income} tone="success" />
-            <AnalyticsCard icon={TrendingDown} title="This Month Expenses" value={periods.thisMonth.expense} tone="danger" />
+            <AnalyticsCard icon={TrendingUp} title="This Month Collected" value={periods.thisMonth.collected} tone="success" />
+            <AnalyticsCard icon={TrendingDown} title="This Month Spent" value={periods.thisMonth.spent} tone="danger" />
             <AnalyticsCard icon={Scale} title="This Month Net" value={periods.thisMonth.netBalance} tone={periods.thisMonth.netBalance >= 0 ? 'brand' : 'danger'} />
             <AnalyticsCard icon={Calendar} title="This Year Net" value={periods.thisYear.netBalance} tone={periods.thisYear.netBalance >= 0 ? 'brand' : 'danger'} />
           </motion.div>
@@ -272,7 +272,6 @@ const AnalyticsPage = () => {
 
           {/* Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-            {/* Trend Chart */}
             {/* Trend Chart */}
             <Card className="lg:col-span-3 p-6">
               <div className="flex items-center justify-between mb-4">
@@ -315,8 +314,8 @@ const AnalyticsPage = () => {
                       itemStyle={{ color: '#FFFFFF' }}
                     />
                     <Legend />
-                    <Bar dataKey="income" name="Income" fill="url(#incomeGrad)" radius={[6,6,0,0]} />
-                    <Bar dataKey="expense" name="Expenses" fill="url(#expenseGrad)" radius={[6,6,0,0]} />
+                    <Bar dataKey="collected" name="Collected" fill="url(#incomeGrad)" radius={[6,6,0,0]} />
+                    <Bar dataKey="spent" name="Spent" fill="url(#expenseGrad)" radius={[6,6,0,0]} />
                   </BarChart>
                 ) : (
                   <AreaChart data={monthlyTrends}>
@@ -353,7 +352,6 @@ const AnalyticsPage = () => {
               </ResponsiveContainer>
             </Card>
 
-            {/* Pie Chart */}
             {/* Pie Chart */}
             <Card className="lg:col-span-2 p-6">
               <div className="flex items-center justify-between mb-4">
@@ -456,18 +454,18 @@ const AnalyticsCard = ({ icon: Icon, title, value, tone = 'brand' }) => {
 
 const PeriodStat = ({ title, period }) => {
   const { currency } = useCurrency();
-  const { income = 0, expense = 0, netBalance = 0 } = period || {};
+  const { collected = 0, spent = 0, netBalance = 0 } = period || {};
   return (
     <div className="rounded-2xl border border-gray-200 dark:border-gray-700 p-5 bg-white dark:bg-gray-900">
       <p className="font-semibold text-gray-800 dark:text-gray-200 mb-2">{title}</p>
       <div className="space-y-2 text-sm">
         <div className="flex items-center justify-between">
-          <span className="text-gray-500 dark:text-gray-400">Income</span>
-          <span className="font-semibold text-emerald-600">{formatCurrency(income, currency.locale, currency.code)}</span>
+          <span className="text-gray-500 dark:text-gray-400">Collected</span>
+          <span className="font-semibold text-emerald-600">{formatCurrency(collected, currency.locale, currency.code)}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-gray-500 dark:text-gray-400">Expense</span>
-          <span className="font-semibold text-rose-600">{formatCurrency(expense)}</span>
+          <span className="text-gray-500 dark:text-gray-400">Spent</span>
+          <span className="font-semibold text-rose-600">{formatCurrency(spent, currency.locale, currency.code)}</span>
         </div>
         <div className="flex items-center justify-between">
           <span className="text-gray-600 dark:text-gray-300 font-medium">Net</span>

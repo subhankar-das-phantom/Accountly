@@ -144,7 +144,7 @@ const BudgetList = ({ goals = [], onEdit, onDelete }) => {
                 <div className="flex items-center justify-between text-xs sm:text-sm">
                   <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
                     <TrendingUp className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
-                    <span className="truncate">Track your spending against this goal</span>
+                    <span className="truncate">Track your expenses against this goal</span>
                   </div>
                   {status.label === 'Current' && (
                     <span className="text-green-600 dark:text-green-400 font-medium flex-shrink-0 ml-2">Active Now</span>
