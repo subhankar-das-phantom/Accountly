@@ -1,7 +1,7 @@
 const Transaction = require('../models/transaction.model');
 const { cache, getCacheKey, invalidateUserCache } = require('../utils/cache');
 
-const getTransactions = async (userId, queryParams) => {
+const getTransactions = async (organizationId, queryParams) => {
   const {
     type,
     category,
@@ -17,13 +17,13 @@ const getTransactions = async (userId, queryParams) => {
   } = queryParams;
 
   // Check cache first
-  const cacheKey = getCacheKey('transactions', userId, queryParams);
+  const cacheKey = getCacheKey('transactions', organizationId, queryParams);
   const cached = cache.get(cacheKey);
   if (cached) {
     return cached;
   }
 
-  const filter = { user: userId };
+  const filter = { organizationId: organizationId };
 
   if (type) filter.type = type;
   if (category) filter.category = category;
@@ -90,7 +90,7 @@ const getTransactions = async (userId, queryParams) => {
   return result;
 };
 
-const createTransaction = async (userId, data) => {
+const createTransaction = async (organizationId, userId, data) => {
   const { type, category, amount, date, description } = data;
   const newTransaction = new Transaction({
     type,
@@ -98,18 +98,20 @@ const createTransaction = async (userId, data) => {
     amount,
     date,
     description,
-    user: userId,
+    user: userId, // temporarily preserved
+    organizationId: organizationId,
   });
 
   const savedTransaction = await newTransaction.save();
-  invalidateUserCache(userId);
+  invalidateUserCache(organizationId);
   return savedTransaction;
 };
 
-const updateTransaction = async (userId, transactionId, data) => {
+const updateTransaction = async (organizationId, transactionId, data) => {
   const { type, category, amount, date, description } = data;
-  const updatedTransaction = await Transaction.findByIdAndUpdate(
-    transactionId,
+  // Ensure the transaction belongs to the organization
+  const updatedTransaction = await Transaction.findOneAndUpdate(
+    { _id: transactionId, organizationId: organizationId },
     {
       type,
       category,
@@ -120,13 +122,16 @@ const updateTransaction = async (userId, transactionId, data) => {
     { new: true }
   );
 
-  invalidateUserCache(userId);
+  invalidateUserCache(organizationId);
   return updatedTransaction;
 };
 
-const deleteTransaction = async (userId, transactionId) => {
-  const deletedTransaction = await Transaction.findByIdAndDelete(transactionId);
-  invalidateUserCache(userId);
+const deleteTransaction = async (organizationId, transactionId) => {
+  const deletedTransaction = await Transaction.findOneAndDelete({
+    _id: transactionId, 
+    organizationId: organizationId
+  });
+  invalidateUserCache(organizationId);
   return deletedTransaction;
 };
 

@@ -2,7 +2,7 @@ const transactionService = require('../services/transactionService');
 
 const getTransactions = async (req, res, next) => {
   try {
-    const result = await transactionService.getTransactions(req.user, req.query);
+    const result = await transactionService.getTransactions(req.organizationId, req.query);
     res.json(result);
   } catch (err) {
     next(err);
@@ -11,7 +11,9 @@ const getTransactions = async (req, res, next) => {
 
 const createTransaction = async (req, res, next) => {
   try {
-    const result = await transactionService.createTransaction(req.user, req.body);
+    // We pass req.user as well temporarily because the model still requires it.
+    // We'll update the service to handle both.
+    const result = await transactionService.createTransaction(req.organizationId, req.user, req.body);
     res.json(result);
   } catch (err) {
     next(err);
@@ -20,7 +22,7 @@ const createTransaction = async (req, res, next) => {
 
 const updateTransaction = async (req, res, next) => {
   try {
-    const result = await transactionService.updateTransaction(req.user, req.params.id, req.body);
+    const result = await transactionService.updateTransaction(req.organizationId, req.params.id, req.body);
     res.json(result);
   } catch (err) {
     next(err);
@@ -29,7 +31,7 @@ const updateTransaction = async (req, res, next) => {
 
 const deleteTransaction = async (req, res, next) => {
   try {
-    const result = await transactionService.deleteTransaction(req.user, req.params.id);
+    const result = await transactionService.deleteTransaction(req.organizationId, req.params.id);
     res.json(result);
   } catch (err) {
     next(err);
