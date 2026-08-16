@@ -2,7 +2,7 @@ const analyticsService = require('../services/analyticsService');
 
 const getSummary = async (req, res, next) => {
   try {
-    const result = await analyticsService.getSummary(req.user);
+    const result = await analyticsService.getSummary(req.organizationId);
     res.json(result);
   } catch (err) {
     next(err);
@@ -11,7 +11,7 @@ const getSummary = async (req, res, next) => {
 
 const getStats = async (req, res, next) => {
   try {
-    const result = await analyticsService.getStats(req.user);
+    const result = await analyticsService.getStats(req.organizationId);
     res.json(result);
   } catch (err) {
     next(err);
@@ -20,7 +20,7 @@ const getStats = async (req, res, next) => {
 
 const getChartData = async (req, res, next) => {
   try {
-    const result = await analyticsService.getChartData(req.user);
+    const result = await analyticsService.getChartData(req.organizationId);
     res.json(result);
   } catch (err) {
     next(err);
@@ -29,7 +29,7 @@ const getChartData = async (req, res, next) => {
 
 const getAnalytics = async (req, res, next) => {
   try {
-    const result = await analyticsService.getAnalytics(req.user);
+    const result = await analyticsService.getAnalytics(req.organizationId);
     res.json(result);
   } catch (err) {
     next(err);

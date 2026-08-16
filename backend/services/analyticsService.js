@@ -1,13 +1,13 @@
 const Transaction = require('../models/transaction.model');
 const { cache, getCacheKey } = require('../utils/cache');
 
-const getSummary = async (userId) => {
-  const cacheKey = getCacheKey('summary', userId);
+const getSummary = async (organizationId) => {
+  const cacheKey = getCacheKey('summary', organizationId);
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
   const summary = await Transaction.aggregate([
-    { $match: { user: userId, type: 'expense' } },
+    { $match: { organizationId: organizationId, type: 'expense' } },
     { $group: { _id: '$category', value: { $sum: '$amount' } } },
     { $project: { name: '$_id', value: 1, _id: 0 } },
   ]);
@@ -16,12 +16,12 @@ const getSummary = async (userId) => {
   return summary;
 };
 
-const getStats = async (userId) => {
-  const cacheKey = getCacheKey('stats', userId);
+const getStats = async (organizationId) => {
+  const cacheKey = getCacheKey('stats', organizationId);
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
-  const transactions = await Transaction.find({ user: userId });
+  const transactions = await Transaction.find({ organizationId: organizationId });
 
   const now = new Date();
 
@@ -91,13 +91,13 @@ const getStats = async (userId) => {
   return response;
 };
 
-const getChartData = async (userId) => {
-  const cacheKey = getCacheKey('chart-data', userId);
+const getChartData = async (organizationId) => {
+  const cacheKey = getCacheKey('chart-data', organizationId);
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
   const transactions = await Transaction.find({ 
-    user: userId, 
+    organizationId: organizationId, 
     type: 'expense' 
   });
   
@@ -117,12 +117,12 @@ const getChartData = async (userId) => {
   return chartData;
 };
 
-const getAnalytics = async (userId) => {
-  const cacheKey = getCacheKey('analytics', userId);
+const getAnalytics = async (organizationId) => {
+  const cacheKey = getCacheKey('analytics', organizationId);
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
-  const transactions = await Transaction.find({ user: userId }).sort({ date: 'desc' });
+  const transactions = await Transaction.find({ organizationId: organizationId }).sort({ date: 'desc' });
 
   // Return empty analytics data structure if no transactions
   if (transactions.length === 0) {
