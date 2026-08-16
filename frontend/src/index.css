@@ -1,0 +1,180 @@
+@import "tailwindcss";
+
+@theme {
+  /* Alias standard colors to our dynamic variables */
+  --color-blue-50: var(--primary-light);
+  --color-blue-100: var(--primary-light);
+  --color-blue-200: var(--primary-light);
+  --color-blue-300: var(--primary-hover);
+  --color-blue-400: var(--primary);
+  --color-blue-500: var(--primary);
+  --color-blue-600: var(--primary);
+  --color-blue-700: var(--primary-hover);
+  --color-blue-800: var(--primary-hover);
+  --color-blue-900: var(--primary-hover);
+
+  --color-cyan-50: var(--secondary-light);
+  --color-cyan-100: var(--secondary-light);
+  --color-cyan-200: var(--secondary-light);
+  --color-cyan-300: var(--secondary-hover);
+  --color-cyan-400: var(--secondary);
+  --color-cyan-500: var(--secondary);
+  --color-cyan-600: var(--secondary-hover);
+  --color-cyan-700: var(--secondary-hover);
+  --color-cyan-800: var(--secondary-hover);
+  --color-cyan-900: var(--secondary-hover);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-light: var(--primary-light);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-hover: var(--secondary-hover);
+  --color-secondary-light: var(--secondary-light);
+
+  --color-success: #22c55e;
+  --color-warning: #eab308;
+  --color-danger: #ef4444;
+  --color-info: #3b82f6;
+
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+
+  --font-sans: 'Inter', system-ui, sans-serif;
+}
+
+:root {
+  /* Default (Blue) */
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-light: #eff6ff;
+
+  --secondary: #06b6d4;
+  --secondary-hover: #0891b2;
+  --secondary-light: #ecfeff;
+
+  --background: #f8fafc;
+  --surface: #ffffff;
+}
+
+/* Pink Theme */
+.theme-pink {
+  --primary: #ec4899;
+  --primary-hover: #db2777;
+  --primary-light: #fdf2f8;
+
+  --secondary: #f472b6;
+  --secondary-hover: #ec4899;
+  --secondary-light: #fce7f3;
+}
+
+/* Purple Theme */
+.theme-purple {
+  --primary: #a855f7;
+  --primary-hover: #9333ea;
+  --primary-light: #faf5ff;
+
+  --secondary: #6366f1;
+  --secondary-hover: #4f46e5;
+  --secondary-light: #eef2ff;
+}
+
+/* Emerald Theme */
+.theme-emerald {
+  --primary: #10b981;
+  --primary-hover: #059669;
+  --primary-light: #ecfdf5;
+
+  --secondary: #14b8a6;
+  --secondary-hover: #0d9488;
+  --secondary-light: #f0fdfa;
+}
+
+/* Custom scrollbar styling */
+@layer utilities {
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thumb-gray-300::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 4px;
+  }
+
+  .scrollbar-thumb-gray-300::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+  }
+
+  .dark .scrollbar-thumb-gray-700::-webkit-scrollbar-thumb {
+    background: #374151;
+    border-radius: 4px;
+  }
+
+  .dark .scrollbar-thumb-gray-700::-webkit-scrollbar-thumb:hover {
+    background: #4b5563;
+  }
+
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #CBD5E0 transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #CBD5E0;
+    border-radius: 10px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #A0AEC0;
+  }
+
+  .dark .custom-scrollbar {
+    scrollbar-color: #4A5568 transparent;
+  }
+
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #4A5568;
+  }
+
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #718096;
+  }
+
+  /* Screen reader only content */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+}
+
+body {
+  background-color: var(--color-background);
+  color: #1e293b;
+  font-family: var(--font-sans);
+}
+
+.dark body {
+  background-color: #0f172a;
+  color: #f1f5f9;
+}
