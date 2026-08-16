@@ -19,7 +19,7 @@ import { formatCurrency } from "../utils/currency";
 // =============================
 // TransactionRow Component
 // =============================
-const TransactionRow = memo(({ transaction, onEdit, onDelete }) => {
+const TransactionRow = memo(({ transaction, onEdit, onDelete, readOnly }) => {
   const [isActive, setIsActive] = useState(false);
   const { currency } = useCurrency();
 
@@ -44,8 +44,6 @@ const TransactionRow = memo(({ transaction, onEdit, onDelete }) => {
       month: "short",
       day: "numeric",
     });
-
-
 
   return (
     <motion.div
@@ -118,7 +116,7 @@ const TransactionRow = memo(({ transaction, onEdit, onDelete }) => {
 
         {/* Edit/Delete Buttons */}
         <AnimatePresence>
-          {isActive && (
+          {isActive && !readOnly && (
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -166,6 +164,7 @@ const TransactionList = ({
   transactions,
   onDelete,
   onEdit,
+  readOnly = false,
   isLoading = false,
   hasMore = false,
   onLoadMore,
@@ -303,6 +302,7 @@ const TransactionList = ({
                         transaction={transaction}
                         onEdit={onEdit}
                         onDelete={onDelete}
+                        readOnly={readOnly}
                       />
                     )}
                   </div>

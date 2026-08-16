@@ -2,7 +2,7 @@ const fieldService = require('../services/contributorFieldService');
 
 const getFields = async (req, res, next) => {
   try {
-    const result = await fieldService.getFields(req.user, req.params.id);
+    const result = await fieldService.getFields(req.params.id);
     res.json(result);
   } catch (err) {
     next(err);

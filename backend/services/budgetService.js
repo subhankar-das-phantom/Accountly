@@ -2,15 +2,15 @@ const mongoose = require('mongoose');
 const BudgetGoal = require('../models/budgetGoal.model');
 const Transaction = require('../models/transaction.model');
 
-const getBudgetGoals = async (userId) => {
-  return await BudgetGoal.find({ user: userId });
+const getBudgetGoals = async (organizationId) => {
+  return await BudgetGoal.find({ organizationId });
 };
 
-const createBudgetGoal = async (userId, data) => {
+const createBudgetGoal = async (organizationId, data) => {
   const { category, amount, month, year } = data;
 
   const existingGoal = await BudgetGoal.findOne({
-    user: userId,
+    organizationId,
     category,
     month,
     year,
@@ -23,7 +23,7 @@ const createBudgetGoal = async (userId, data) => {
   }
 
   const newBudgetGoal = new BudgetGoal({
-    user: userId,
+    organizationId,
     category,
     amount,
     month,
@@ -33,11 +33,11 @@ const createBudgetGoal = async (userId, data) => {
   return await newBudgetGoal.save();
 };
 
-const updateBudgetGoal = async (userId, goalId, data) => {
+const updateBudgetGoal = async (organizationId, goalId, data) => {
   const { category, amount, month, year } = data;
 
   const updatedBudgetGoal = await BudgetGoal.findOneAndUpdate(
-    { _id: goalId, user: userId },
+    { _id: goalId, organizationId },
     { category, amount, month, year },
     { new: true, runValidators: true }
   );
@@ -51,10 +51,10 @@ const updateBudgetGoal = async (userId, goalId, data) => {
   return updatedBudgetGoal;
 };
 
-const deleteBudgetGoal = async (userId, goalId) => {
+const deleteBudgetGoal = async (organizationId, goalId) => {
   const deletedBudgetGoal = await BudgetGoal.findOneAndDelete({
     _id: goalId,
-    user: userId,
+    organizationId,
   });
 
   if (!deletedBudgetGoal) {
@@ -77,13 +77,13 @@ const getCategories = async (organizationId) => {
   ]);
 };
 
-const getBudgetProgress = async (userId, organizationId) => {
+const getBudgetProgress = async (organizationId) => {
   const now = new Date();
   const currentMonth = now.getMonth();
   const currentYear = now.getFullYear();
 
   const budgetGoals = await BudgetGoal.find({
-    user: userId,
+    organizationId,
     month: currentMonth,
     year: currentYear,
   });

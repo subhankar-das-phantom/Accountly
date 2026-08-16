@@ -26,7 +26,7 @@ const AnalyticsPage = () => {
   const { token } = useContext(AuthContext);
   const { timeFilter } = useTimeFilter();
 
-  const { data: analyticsDataRaw, error: analyticsError, isLoading: isAnalyticsLoading } = useApi(token ? 'transactions/analytics' : null);
+  const { data: analyticsDataRaw, error: analyticsError, isLoading: isAnalyticsLoading } = useApi(token ? 'analytics/analytics' : null);
   const { data: budgetGoalsRaw, error: budgetError, isLoading: isBudgetLoading } = useApi(token ? '/budget' : null);
   const { data: budgetProgressRaw, error: progressError, isLoading: isProgressLoading } = useApi(token ? '/budget/progress' : null);
 

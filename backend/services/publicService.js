@@ -42,7 +42,9 @@ const getOrganizationSummary = async (slug) => {
     organization: {
       name: org.name,
       description: org.description,
-      currency: org.currency
+      currency: org.currency,
+      status: org.status,
+      settings: org.settings
     },
     summary: {
       totalCollected: analytics.summary.totalCollected,

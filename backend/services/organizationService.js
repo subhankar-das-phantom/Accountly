@@ -1,4 +1,6 @@
 const Organization = require('../models/organization.model');
+const OrganizationMember = require('../models/organizationMember.model');
+const auditLogService = require('./auditLogService');
 
 const generateSlug = (name) => {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
@@ -17,26 +19,41 @@ const createOrganization = async (userId, data) => {
     counter++;
   }
 
-  const newOrg = new Organization({
-    name,
-    slug,
-    description,
-    currency,
-    settings,
-    owner: userId
-  });
+  return await auditLogService.withAuditTransaction(async (session) => {
+    const newOrg = new Organization({
+      name,
+      slug,
+      description,
+      currency,
+      settings,
+      owner: userId // Retained temporarily for backward compatibility
+    });
 
-  return await newOrg.save();
+    const savedOrg = await newOrg.save({ session });
+
+    const newMember = new OrganizationMember({
+      organizationId: savedOrg._id,
+      userId,
+      role: 'OWNER',
+      status: 'ACTIVE'
+    });
+
+    await newMember.save({ session });
+
+    return savedOrg;
+  });
 };
 
 const getOrganizationsForUser = async (userId) => {
-  return await Organization.find({ owner: userId }).sort({ createdAt: -1 });
+  const memberships = await OrganizationMember.find({ userId, status: 'ACTIVE' });
+  const orgIds = memberships.map(m => m.organizationId);
+  return await Organization.find({ _id: { $in: orgIds } }).sort({ createdAt: -1 });
 };
 
-const getOrganization = async (userId, orgId) => {
-  const org = await Organization.findOne({ _id: orgId, owner: userId });
+const getOrganization = async (orgId) => {
+  const org = await Organization.findById(orgId);
   if (!org) {
-    const error = new Error('Organization not found or unauthorized');
+    const error = new Error('Organization not found');
     error.status = 404;
     throw error;
   }
@@ -46,27 +63,55 @@ const getOrganization = async (userId, orgId) => {
 const updateOrganization = async (userId, orgId, data) => {
   const { name, description, currency, settings } = data;
   
-  const org = await Organization.findOne({ _id: orgId, owner: userId });
-  if (!org) {
-    const error = new Error('Organization not found or unauthorized');
-    error.status = 404;
-    throw error;
-  }
+  return await auditLogService.withAuditTransaction(async (session) => {
+    const org = await Organization.findById(orgId).session(session);
+    if (!org) {
+      const error = new Error('Organization not found');
+      error.status = 404;
+      throw error;
+    }
 
-  if (name) org.name = name;
-  if (description !== undefined) org.description = description;
-  if (currency) org.currency = currency;
-  if (settings) {
-    org.settings = { ...org.settings, ...settings };
-  }
+    const prevOrg = org.toObject();
 
-  return await org.save();
+    let settingsChanged = false;
+    if (name) org.name = name;
+    if (description !== undefined) org.description = description;
+    
+    if (currency && org.currency !== currency) {
+      org.currency = currency;
+      settingsChanged = true;
+    }
+    
+    if (settings) {
+      org.settings = { ...org.settings, ...settings };
+      settingsChanged = true;
+    }
+
+    await org.save({ session });
+
+    try {
+      await auditLogService.createAuditLog({
+        organizationId: orgId,
+        actorId: userId,
+        action: settingsChanged ? 'PUBLIC_SETTINGS_UPDATE' : 'UPDATE',
+        entityType: 'Organization',
+        entityId: orgId,
+        previousData: prevOrg,
+        newData: org.toObject()
+      }, session);
+    } catch (err) {
+      if (!session) err.isAuditFailure = true;
+      throw err;
+    }
+
+    return org;
+  });
 };
 
 const deleteOrganization = async (userId, orgId) => {
-  const org = await Organization.findOne({ _id: orgId, owner: userId });
+  const org = await Organization.findById(orgId);
   if (!org) {
-    const error = new Error('Organization not found or unauthorized');
+    const error = new Error('Organization not found');
     error.status = 404;
     throw error;
   }

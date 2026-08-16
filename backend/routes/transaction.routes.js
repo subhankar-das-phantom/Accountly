@@ -1,18 +1,27 @@
 const router = require('express').Router();
 const auth = require('../middleware/auth');
 const resolveOrganization = require('../middleware/resolveOrganization');
+const requireRole = require('../middleware/requireRole');
+const requireActive = require('../middleware/requireActive');
 const transactionController = require('../controllers/transactionController');
 
-// Get all transactions
-router.get('/', auth, resolveOrganization, transactionController.getTransactions);
+// All transaction routes require authentication and organization resolution
+router.use(auth);
+router.use(resolveOrganization);
+
+// Get transactions
+router.get('/', requireRole(['OWNER', 'ADMIN']), transactionController.getTransactions);
+
+// Mutating endpoints require ACTIVE status
+router.use(requireActive);
 
 // Add new transaction
-router.post('/', auth, resolveOrganization, transactionController.createTransaction);
+router.post('/', requireRole(['OWNER', 'ADMIN']), transactionController.createTransaction);
 
-// Update transaction
-router.put('/:id', auth, resolveOrganization, transactionController.updateTransaction);
+// Update a transaction
+router.put('/:id', requireRole(['OWNER', 'ADMIN']), transactionController.updateTransaction);
 
-// Delete transaction
-router.delete('/:id', auth, resolveOrganization, transactionController.deleteTransaction);
+// Delete a transaction
+router.delete('/:id', requireRole(['OWNER', 'ADMIN']), transactionController.deleteTransaction);
 
 module.exports = router;

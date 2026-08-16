@@ -1,5 +1,6 @@
 const Transaction = require('../models/transaction.model');
 const { cache, getCacheKey, invalidateUserCache } = require('../utils/cache');
+const auditLogService = require('./auditLogService');
 
 const getTransactions = async (organizationId, queryParams) => {
   const {
@@ -138,33 +139,8 @@ const createTransaction = async (organizationId, userId, data) => {
   
   const validatedContributor = await validateMetadata(organizationId, type, contributor);
 
-  const newTransaction = new Transaction({
-    type,
-    category,
-    amount,
-    date,
-    description,
-    contributor: validatedContributor,
-    recipient,
-    status,
-    user: userId, // temporarily preserved
-    organizationId: organizationId,
-  });
-
-  const savedTransaction = await newTransaction.save();
-  await invalidateUserCache(organizationId);
-  return savedTransaction;
-};
-
-const updateTransaction = async (organizationId, transactionId, data) => {
-  const { type, category, amount, date, description, contributor, recipient, status } = data;
-  
-  const validatedContributor = await validateMetadata(organizationId, type, contributor);
-
-  // Ensure the transaction belongs to the organization
-  const updatedTransaction = await Transaction.findOneAndUpdate(
-    { _id: transactionId, organizationId: organizationId },
-    {
+  return await auditLogService.withAuditTransaction(async (session) => {
+    const newTransaction = new Transaction({
       type,
       category,
       amount,
@@ -172,22 +148,105 @@ const updateTransaction = async (organizationId, transactionId, data) => {
       description,
       contributor: validatedContributor,
       recipient,
-      status
-    },
-    { new: true }
-  );
+      status,
+      organizationId: organizationId,
+    });
 
-  await invalidateUserCache(organizationId);
-  return updatedTransaction;
+    const savedTransaction = session ? await newTransaction.save({ session }) : await newTransaction.save();
+    
+    try {
+      await auditLogService.createAuditLog({
+        organizationId,
+        actorId: userId,
+        action: 'CREATE',
+        entityType: 'FinancialRecord',
+        entityId: savedTransaction._id,
+        previousData: null,
+        newData: savedTransaction
+      }, session);
+    } catch (err) {
+      if (!session) err.isAuditFailure = true;
+      throw err;
+    }
+
+    await invalidateUserCache(organizationId);
+    return savedTransaction;
+  });
 };
 
-const deleteTransaction = async (organizationId, transactionId) => {
-  const deletedTransaction = await Transaction.findOneAndDelete({
-    _id: transactionId, 
-    organizationId: organizationId
+const updateTransaction = async (organizationId, transactionId, data, userId) => {
+  const { type, category, amount, date, description, contributor, recipient, status } = data;
+  
+  const validatedContributor = await validateMetadata(organizationId, type, contributor);
+
+  return await auditLogService.withAuditTransaction(async (session) => {
+    // Ensure the transaction belongs to the organization
+    const prevTransaction = await Transaction.findOne({ _id: transactionId, organizationId }).lean();
+    if (!prevTransaction) throw Object.assign(new Error('Transaction not found'), { status: 404 });
+
+    const updatedTransaction = await Transaction.findOneAndUpdate(
+      { _id: transactionId, organizationId },
+      {
+        type,
+        category,
+        amount,
+        date,
+        description,
+        contributor: validatedContributor,
+        recipient,
+        status
+      },
+      { new: true, session }
+    );
+
+    try {
+      await auditLogService.createAuditLog({
+        organizationId,
+        actorId: userId,
+        action: 'UPDATE',
+        entityType: 'FinancialRecord',
+        entityId: transactionId,
+        previousData: prevTransaction,
+        newData: updatedTransaction
+      }, session);
+    } catch (err) {
+      if (!session) err.isAuditFailure = true;
+      throw err;
+    }
+
+    await invalidateUserCache(organizationId);
+    return updatedTransaction;
   });
-  await invalidateUserCache(organizationId);
-  return deletedTransaction;
+};
+
+const deleteTransaction = async (organizationId, transactionId, userId) => {
+  return await auditLogService.withAuditTransaction(async (session) => {
+    const prevTransaction = await Transaction.findOne({ _id: transactionId, organizationId }).lean();
+    if (!prevTransaction) throw Object.assign(new Error('Transaction not found'), { status: 404 });
+
+    const deletedTransaction = await Transaction.findOneAndDelete({
+      _id: transactionId, 
+      organizationId
+    }, { session });
+
+    try {
+      await auditLogService.createAuditLog({
+        organizationId,
+        actorId: userId,
+        action: 'DELETE',
+        entityType: 'FinancialRecord',
+        entityId: transactionId,
+        previousData: prevTransaction,
+        newData: null
+      }, session);
+    } catch (err) {
+      if (!session) err.isAuditFailure = true;
+      throw err;
+    }
+
+    await invalidateUserCache(organizationId);
+    return deletedTransaction;
+  });
 };
 
 module.exports = {

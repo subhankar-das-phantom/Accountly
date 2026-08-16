@@ -23,6 +23,7 @@ import Chart from "../components/Chart";
 import TransactionList from "../components/TransactionList";
 import TransactionForm from "../components/TransactionForm";
 import BudgetForm from "../components/BudgetForm";
+import OnboardingWizard from "../components/OnboardingWizard";
 import { AuthContext } from "../context/AuthContext";
 import { useCurrency } from "../context/CurrencyContext";
 import { useTimeFilter } from "../context/TimeFilterContext";
@@ -38,9 +39,12 @@ const HomePage = () => {
   const { timeFilter, setTimeFilter } = useTimeFilter();
 
   const now = new Date();
+  const { data: orgData, mutate: mutateOrg } = useApi(token ? 'organizations' : null);
   const { data: allTransactionsRaw, isLoading: isLoadingTransactions, mutate: mutateTransactions, isValidating: isValidatingTransactions } = useApi(token ? 'transactions' : null);
-  const { data: analyticsData, isLoading: isLoadingStats, isValidating: isValidatingStats } = useApi(token ? `transactions/analytics?periodType=${timeFilter}` : null);
-  const { data: budgetData, isLoading: isLoadingBudget, isValidating: isValidatingBudget } = useApi(token ? `transactions/budget-vs-actual?month=${now.getMonth() + 1}&year=${now.getFullYear()}` : null);
+  const { data: analyticsData, isLoading: isLoadingStats, isValidating: isValidatingStats } = useApi(token ? `analytics/analytics?periodType=${timeFilter}` : null);
+  const { data: budgetData, isLoading: isLoadingBudget, isValidating: isValidatingBudget } = useApi(token ? `analytics/budget-vs-actual?month=${now.getMonth() + 1}&year=${now.getFullYear()}` : null);
+
+  const activeOrg = orgData && orgData.length > 0 ? orgData[0] : null;
 
   const allTransactions = Array.isArray(allTransactionsRaw?.transactions || allTransactionsRaw) ? (allTransactionsRaw?.transactions || allTransactionsRaw) : [];
   const recentTransactions = allTransactions.slice(0, 5);
@@ -243,7 +247,7 @@ const HomePage = () => {
   };
 
 
-  if (isLoading) {
+  if (isLoading || !activeOrg) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pt-20 px-4">
         <div className="max-w-7xl mx-auto">
@@ -267,6 +271,16 @@ const HomePage = () => {
     );
   }
 
+  if (activeOrg && activeOrg.settings && !activeOrg.settings.isOnboarded) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pt-20 px-4">
+        <OnboardingWizard organization={activeOrg} onComplete={refreshData} />
+      </div>
+    );
+  }
+
+  const isArchived = activeOrg?.status === 'ARCHIVED';
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pt-20 px-4">
       <div className="max-w-7xl mx-auto">
@@ -276,6 +290,24 @@ const HomePage = () => {
           animate="visible"
           className="space-y-8"
         >
+          {isArchived && (
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded shadow-sm mb-6">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <AlertCircle className="h-5 w-5 text-yellow-400" aria-hidden="true" />
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-yellow-700 font-medium">
+                    ARCHIVED ORGANIZATION
+                  </p>
+                  <p className="text-sm text-yellow-600 mt-1">
+                    This organization is read-only. You cannot add or edit financial records.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Header Section */}
           <motion.div
             variants={itemVariants}
@@ -371,21 +403,123 @@ const HomePage = () => {
 
           {/* Main Content Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Chart Section */}
             <motion.div variants={itemVariants}>
-              <Chart data={chartData} title="Expense Categories" />
+              <Card className="h-[450px] p-6 flex flex-col">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6">
+                  Cash Flow Overview
+                </h3>
+                {stats.summary.contributionCount === 0 && stats.summary.expenseCount === 0 ? (
+                  <div className="flex-1 flex flex-col items-center justify-center text-gray-500">
+                    <PieChart className="w-16 h-16 mb-4 text-gray-300" />
+                    <p>No financial data yet.</p>
+                  </div>
+                ) : (
+                  <div className="flex-1 min-h-0">
+                    <Chart data={chartData} />
+                  </div>
+                )}
+              </Card>
             </motion.div>
 
-            {/* Recent Transactions */}
-            <motion.div variants={itemVariants}>
-              <TransactionList
-                transactions={recentTransactions}
-                onEdit={handleEditTransaction}
-                onDelete={handleDeleteTransaction}
-                isLoading={false}
-              />
-            </motion.div>
+            {activeOrg?.settings?.fundTarget > 0 ? (
+              <motion.div variants={itemVariants}>
+                <Card className="p-6 h-[450px] flex flex-col">
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                      Fund Target Progress
+                    </h3>
+                    <Target className="w-5 h-5 text-gray-400" />
+                  </div>
+                  <div className="flex-1 flex flex-col justify-center px-4">
+                    <div className="mb-8">
+                      <div className="flex justify-between text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
+                        <span>Collected</span>
+                        <span>Target</span>
+                      </div>
+                      <div className="flex justify-between text-xl font-bold text-gray-900 dark:text-white mb-4">
+                        <span>{formatCurrency(filteredStats.collected, activeOrg.currency.locale, activeOrg.currency.code)}</span>
+                        <span>{formatCurrency(activeOrg.settings.fundTarget, activeOrg.currency.locale, activeOrg.currency.code)}</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-4 dark:bg-gray-700">
+                        <div 
+                          className="bg-blue-600 h-4 rounded-full" 
+                          style={{ width: `${Math.min((filteredStats.collected / activeOrg.settings.fundTarget) * 100, 100)}%` }}
+                        ></div>
+                      </div>
+                      <p className="mt-4 text-center text-sm font-medium text-gray-600">
+                        {((filteredStats.collected / activeOrg.settings.fundTarget) * 100).toFixed(1)}% Achieved
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+              </motion.div>
+            ) : (
+              <motion.div variants={itemVariants} className="space-y-4 h-full flex flex-col">
+                <QuickActionCard
+                  title="Generate Report"
+                  description="Download detailed financial summary"
+                  icon={Download}
+                  color="blue"
+                  onClick={() => setIsGeneratingReport(true)}
+                />
+                <QuickActionCard
+                  title="Public Transparency"
+                  description="Manage public page access"
+                  icon={Globe}
+                  color="green"
+                  onClick={() => setIsPublicSettingsOpen(true)}
+                />
+              </motion.div>
+            )}
           </div>
+
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+              Recent Transactions
+            </h2>
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => navigate("/transactions")}
+                className="whitespace-nowrap"
+              >
+                View All
+              </Button>
+              <Button
+                onClick={() => setShowAddForm(true)}
+                disabled={isArchived}
+                className="whitespace-nowrap"
+              >
+                <Plus className="w-4 h-4 mr-1" /> Add
+              </Button>
+            </div>
+          </div>
+          
+          {recentTransactions.length === 0 ? (
+            <div className="py-12 flex flex-col items-center justify-center text-center">
+              <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded-full mb-4">
+                <Wallet className="w-8 h-8 text-gray-400" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">No transactions yet</h3>
+              <p className="text-gray-500 dark:text-gray-400 mb-6 max-w-sm">
+                Get started by recording your first contribution or expense to track your finances.
+              </p>
+              <Button 
+                onClick={() => setShowAddForm(true)}
+                disabled={isArchived}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Record Transaction
+              </Button>
+            </div>
+          ) : (
+            <TransactionList
+              transactions={recentTransactions}
+              onEdit={handleEditTransaction}
+              onDelete={handleDeleteTransaction}
+              readOnly={isArchived}
+            />
+          )}
 
           {/* Budget vs Actual (Admin Only) */}
           {budgetData && budgetData.breakdown && budgetData.breakdown.length > 0 && (

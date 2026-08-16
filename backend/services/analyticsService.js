@@ -318,7 +318,7 @@ const getMetadataAnalytics = async (organizationId, groupBy, filter = {}) => {
 // ==========================================
 
 const getBudgetVsActual = async (organizationId, filter = {}) => {
-  const Budget = require('../models/budget.model');
+  const Budget = require('../models/budgetGoal.model');
   const orgId = new mongoose.Types.ObjectId(organizationId);
   
   const now = new Date();
@@ -366,6 +366,37 @@ const getBudgetVsActual = async (organizationId, filter = {}) => {
   };
 };
 
+const checkIntegrity = async (organizationId) => {
+  const orgId = new mongoose.Types.ObjectId(organizationId);
+
+  const result = await Transaction.aggregate([
+    { $match: { organizationId: orgId } },
+    {
+      $group: {
+        _id: '$type',
+        totalAmount: { $sum: '$amount' }
+      }
+    }
+  ]);
+
+  let totalCollected = 0;
+  let totalSpent = 0;
+
+  result.forEach(r => {
+    if (r._id === 'contribution') totalCollected = r.totalAmount;
+    if (r._id === 'expense') totalSpent = r.totalAmount;
+  });
+
+  const remainingBalance = totalCollected - totalSpent;
+
+  return {
+    valid: true,
+    totalCollected,
+    totalSpent,
+    remainingBalance
+  };
+};
+
 module.exports = {
   getAnalytics,
   getSummary,
@@ -373,5 +404,6 @@ module.exports = {
   getChartData,
   calculateFinancialStats,
   getMetadataAnalytics,
-  getBudgetVsActual
+  getBudgetVsActual,
+  checkIntegrity
 };

@@ -3,9 +3,9 @@ const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
 const budgetGoalSchema = new Schema({
-  user: {
+  organizationId: {
     type: Schema.Types.ObjectId,
-    ref: 'User',
+    ref: 'Organization',
     required: true
   },
   category: {
@@ -35,7 +35,7 @@ const budgetGoalSchema = new Schema({
 });
 
 
-budgetGoalSchema.index({ user: 1, category: 1, month: 1, year: 1 }, { unique: true });
+budgetGoalSchema.index({ organizationId: 1, category: 1, month: 1, year: 1 }, { unique: true });
 
 const BudgetGoal = mongoose.model('BudgetGoal', budgetGoalSchema);
 

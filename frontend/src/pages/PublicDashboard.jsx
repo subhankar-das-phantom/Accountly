@@ -11,7 +11,8 @@ import {
   Tag,
   User,
   Store,
-  ArrowLeft
+  ArrowLeft,
+  Target
 } from 'lucide-react';
 import api from '../services/api';
 import { useCurrency } from '../context/CurrencyContext';
@@ -236,9 +237,15 @@ const PublicDashboard = () => {
             {organization.name}
           </h1>
           {organization.description && (
-            <p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+            <p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto mb-4">
               {organization.description}
             </p>
+          )}
+          {organization.status === 'ARCHIVED' && (
+            <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-500">
+              <AlertCircle className="w-4 h-4 mr-1.5" />
+              Archived Organization
+            </div>
           )}
         </div>
       </div>
@@ -280,6 +287,35 @@ const PublicDashboard = () => {
             </div>
           </div>
         </div>
+
+        {/* Target Progress */}
+        {organization.settings?.publicTarget && organization.settings?.fundTarget > 0 && (
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 border border-gray-100 dark:border-gray-700">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-lg font-bold text-gray-800 dark:text-white">Fund Target</h2>
+              <Target className="w-6 h-6 text-blue-500" />
+            </div>
+            <div className="max-w-3xl mx-auto">
+              <div className="flex justify-between text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
+                <span>Collected</span>
+                <span>Target</span>
+              </div>
+              <div className="flex justify-between text-2xl font-bold text-gray-900 dark:text-white mb-4">
+                <span>{formatCurrency(summary.totalCollected, organization.currency.locale, organization.currency.code)}</span>
+                <span>{formatCurrency(organization.settings.fundTarget, organization.currency.locale, organization.currency.code)}</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-6 dark:bg-gray-700 overflow-hidden relative">
+                <div 
+                  className="bg-gradient-to-r from-blue-500 to-cyan-500 h-6 rounded-full transition-all duration-1000 ease-out" 
+                  style={{ width: `${Math.min((summary.totalCollected / organization.settings.fundTarget) * 100, 100)}%` }}
+                ></div>
+                <div className="absolute inset-0 flex items-center justify-center text-xs font-bold text-gray-800 mix-blend-overlay">
+                  {((summary.totalCollected / organization.settings.fundTarget) * 100).toFixed(1)}%
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Summary Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

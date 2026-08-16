@@ -1,7 +1,7 @@
 import React from 'react';
 import { HashRouter as Router, Route, Routes } from 'react-router-dom';
 import Navbar from './components/Navbar';
-import { Container } from '@mui/material';
+import ProtectedRoute from './components/ProtectedRoute';
 
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
@@ -23,13 +23,13 @@ function App() {
       <Navbar />
         <AnimatePresence mode="wait">
           <Routes>
-            <Route path="/" element={<HomePage />} />
+            <Route path="/" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
             <Route path="/public/:slug" element={<PublicDashboard />} />
-            <Route path="/transactions" element={<TransactionsPage />} />
-            <Route path="/analytics" element={<AnalyticsPage />} />
-            <Route path="/budget" element={<BudgetPage />} />
-            <Route path="/profile" element={<ProfilePage />} />
-            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/transactions" element={<ProtectedRoute><TransactionsPage /></ProtectedRoute>} />
+            <Route path="/analytics" element={<ProtectedRoute><AnalyticsPage /></ProtectedRoute>} />
+            <Route path="/budget" element={<ProtectedRoute><BudgetPage /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
           </Routes>

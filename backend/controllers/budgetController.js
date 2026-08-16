@@ -2,7 +2,7 @@ const budgetService = require('../services/budgetService');
 
 const getBudgetGoals = async (req, res, next) => {
   try {
-    const result = await budgetService.getBudgetGoals(req.user);
+    const result = await budgetService.getBudgetGoals(req.organizationId);
     res.json(result);
   } catch (err) {
     next(err);
@@ -11,7 +11,7 @@ const getBudgetGoals = async (req, res, next) => {
 
 const createBudgetGoal = async (req, res, next) => {
   try {
-    const result = await budgetService.createBudgetGoal(req.user, req.body);
+    const result = await budgetService.createBudgetGoal(req.organizationId, req.body);
     res.json(result);
   } catch (err) {
     if (err.status === 400) {
@@ -23,7 +23,7 @@ const createBudgetGoal = async (req, res, next) => {
 
 const updateBudgetGoal = async (req, res, next) => {
   try {
-    const result = await budgetService.updateBudgetGoal(req.user, req.params.id, req.body);
+    const result = await budgetService.updateBudgetGoal(req.organizationId, req.params.id, req.body);
     res.json(result);
   } catch (err) {
     if (err.status === 404) {
@@ -35,7 +35,7 @@ const updateBudgetGoal = async (req, res, next) => {
 
 const deleteBudgetGoal = async (req, res, next) => {
   try {
-    const result = await budgetService.deleteBudgetGoal(req.user, req.params.id);
+    const result = await budgetService.deleteBudgetGoal(req.organizationId, req.params.id);
     res.json(result);
   } catch (err) {
     if (err.status === 404) {
@@ -56,9 +56,7 @@ const getCategories = async (req, res, next) => {
 
 const getBudgetProgress = async (req, res, next) => {
   try {
-    // We pass req.user for finding BudgetGoals (still user owned)
-    // and req.organizationId for aggregating Transactions.
-    const result = await budgetService.getBudgetProgress(req.user, req.organizationId);
+    const result = await budgetService.getBudgetProgress(req.organizationId);
     res.json(result);
   } catch (err) {
     next(err);

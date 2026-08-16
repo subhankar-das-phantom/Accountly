@@ -68,7 +68,13 @@ const loginUser = async ({ email, password }) => {
 };
 
 const getUserProfile = async (userId) => {
-  return await User.findById(userId).select('-password');
+  const user = await User.findById(userId).select('-password');
+  if (!user) {
+    const error = new Error('User not found');
+    error.status = 404;
+    throw error;
+  }
+  return user;
 };
 
 const updateCurrency = async (userId, { code, locale }) => {

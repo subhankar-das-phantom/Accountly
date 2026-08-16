@@ -61,6 +61,10 @@ const TransactionsPage = () => {
   const { token } = useContext(AuthContext);
   const { timeFilter, setTimeFilter, getDateRange } = useTimeFilter();
 
+  const { data: orgData } = useApi(token ? 'organizations' : null);
+  const activeOrg = orgData && orgData.length > 0 ? orgData[0] : null;
+  const isArchived = activeOrg?.status === 'ARCHIVED';
+
   // Debounced search term
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
@@ -750,6 +754,7 @@ const TransactionsPage = () => {
                     setShowAddForm(true);
                   }}
                   icon={Plus}
+                  disabled={isArchived}
                 >
                   <span className="hidden sm:inline">Add</span>
                 </Button>
@@ -922,6 +927,7 @@ const TransactionsPage = () => {
               transactions={transactions}
               onEdit={handleEdit}
               onDelete={handleDelete}
+              readOnly={isArchived}
               isLoading={isLoading}
             />
           </motion.div>

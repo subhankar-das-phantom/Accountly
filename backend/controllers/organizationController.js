@@ -20,7 +20,7 @@ const getOrganizations = async (req, res, next) => {
 
 const getOrganization = async (req, res, next) => {
   try {
-    const result = await organizationService.getOrganization(req.user, req.params.id);
+    const result = await organizationService.getOrganization(req.params.id);
     res.json(result);
   } catch (err) {
     next(err);
@@ -59,11 +59,31 @@ const patchPublicSettings = async (req, res, next) => {
   }
 };
 
+const archiveOrganization = async (req, res, next) => {
+  try {
+    const result = await organizationService.archiveOrganization(req.user, req.params.id);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const restoreOrganization = async (req, res, next) => {
+  try {
+    const result = await organizationService.restoreOrganization(req.user, req.params.id);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   createOrganization,
   getOrganizations,
   getOrganization,
   updateOrganization,
   deleteOrganization,
-  patchPublicSettings
+  patchPublicSettings,
+  archiveOrganization,
+  restoreOrganization
 };

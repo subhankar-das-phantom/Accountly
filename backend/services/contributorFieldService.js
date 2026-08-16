@@ -1,4 +1,5 @@
 const Organization = require('../models/organization.model');
+const auditLogService = require('./auditLogService');
 
 const DANGEROUS_KEYS = ['__proto__', 'constructor', 'prototype', '$where', 'name'];
 
@@ -44,58 +45,119 @@ const validateFieldConfig = (fieldData) => {
   };
 };
 
-const getFields = async (userId, orgId) => {
-  const org = await Organization.findOne({ _id: orgId, owner: userId }).lean();
+const getFields = async (orgId) => {
+  const org = await Organization.findById(orgId).lean();
   if (!org) throw Object.assign(new Error('Organization not found'), { status: 404 });
   return org.contributorFields || [];
 };
 
 const addField = async (userId, orgId, fieldData) => {
-  const org = await Organization.findOne({ _id: orgId, owner: userId });
-  if (!org) throw Object.assign(new Error('Organization not found'), { status: 404 });
+  return await auditLogService.withAuditTransaction(async (session) => {
+    const org = await Organization.findById(orgId).session(session);
+    if (!org) throw Object.assign(new Error('Organization not found'), { status: 404 });
 
-  if (!org.contributorFields) org.contributorFields = [];
-  if (org.contributorFields.length >= 20) {
-    throw Object.assign(new Error('Maximum number of contributor fields (20) reached'), { status: 400 });
-  }
+    if (!org.contributorFields) org.contributorFields = [];
+    if (org.contributorFields.length >= 20) {
+      throw Object.assign(new Error('Maximum number of contributor fields (20) reached'), { status: 400 });
+    }
 
-  const validField = validateFieldConfig(fieldData);
+    const validField = validateFieldConfig(fieldData);
 
-  if (org.contributorFields.some(f => f.key === validField.key)) {
-    throw Object.assign(new Error('Field key already exists'), { status: 400 });
-  }
+    if (org.contributorFields.some(f => f.key === validField.key)) {
+      throw Object.assign(new Error('Field key already exists'), { status: 400 });
+    }
 
-  org.contributorFields.push(validField);
-  await org.save();
-  return org.contributorFields;
+    org.contributorFields.push(validField);
+    await org.save({ session });
+
+    try {
+      await auditLogService.createAuditLog({
+        organizationId: orgId,
+        actorId: userId,
+        action: 'CONTRIBUTOR_FIELD_CREATE',
+        entityType: 'ContributorField',
+        entityId: orgId, // Field doesn't have an id, it is embedded in org
+        previousData: null,
+        newData: validField
+      }, session);
+    } catch (err) {
+      if (!session) err.isAuditFailure = true;
+      throw err;
+    }
+
+    return org.contributorFields;
+  });
 };
 
 const updateField = async (userId, orgId, fieldKey, fieldData) => {
-  const org = await Organization.findOne({ _id: orgId, owner: userId });
-  if (!org) throw Object.assign(new Error('Organization not found'), { status: 404 });
-  
-  if (!org.contributorFields) org.contributorFields = [];
-  const fieldIndex = org.contributorFields.findIndex(f => f.key === fieldKey);
-  if (fieldIndex === -1) throw Object.assign(new Error('Field not found'), { status: 404 });
+  return await auditLogService.withAuditTransaction(async (session) => {
+    const org = await Organization.findById(orgId).session(session);
+    if (!org) throw Object.assign(new Error('Organization not found'), { status: 404 });
+    
+    if (!org.contributorFields) org.contributorFields = [];
+    const fieldIndex = org.contributorFields.findIndex(f => f.key === fieldKey);
+    if (fieldIndex === -1) throw Object.assign(new Error('Field not found'), { status: 404 });
 
-  // Disallow key changes
-  fieldData.key = fieldKey;
-  const validField = validateFieldConfig(fieldData);
+    const prevField = org.contributorFields[fieldIndex];
 
-  org.contributorFields[fieldIndex] = validField;
-  await org.save();
-  return org.contributorFields;
+    // Disallow key changes
+    fieldData.key = fieldKey;
+    const validField = validateFieldConfig(fieldData);
+
+    org.contributorFields[fieldIndex] = validField;
+    await org.save({ session });
+
+    try {
+      await auditLogService.createAuditLog({
+        organizationId: orgId,
+        actorId: userId,
+        action: 'CONTRIBUTOR_FIELD_UPDATE',
+        entityType: 'ContributorField',
+        entityId: orgId,
+        previousData: prevField,
+        newData: validField
+      }, session);
+    } catch (err) {
+      if (!session) err.isAuditFailure = true;
+      throw err;
+    }
+
+    return org.contributorFields;
+  });
 };
 
 const deleteField = async (userId, orgId, fieldKey) => {
-  const org = await Organization.findOne({ _id: orgId, owner: userId });
-  if (!org) throw Object.assign(new Error('Organization not found'), { status: 404 });
+  return await auditLogService.withAuditTransaction(async (session) => {
+    const org = await Organization.findById(orgId).session(session);
+    if (!org) throw Object.assign(new Error('Organization not found'), { status: 404 });
 
-  if (!org.contributorFields) org.contributorFields = [];
-  org.contributorFields = org.contributorFields.filter(f => f.key !== fieldKey);
-  
-  await org.save();
-  return org.contributorFields;
+    if (!org.contributorFields) org.contributorFields = [];
+    
+    const fieldIndex = org.contributorFields.findIndex(f => f.key === fieldKey);
+    if (fieldIndex === -1) throw Object.assign(new Error('Field not found'), { status: 404 });
+
+    const prevField = org.contributorFields[fieldIndex];
+    org.contributorFields = org.contributorFields.filter(f => f.key !== fieldKey);
+    
+    await org.save({ session });
+
+    try {
+      await auditLogService.createAuditLog({
+        organizationId: orgId,
+        actorId: userId,
+        action: 'CONTRIBUTOR_FIELD_DELETE',
+        entityType: 'ContributorField',
+        entityId: orgId,
+        previousData: prevField,
+        newData: null
+      }, session);
+    } catch (err) {
+      if (!session) err.isAuditFailure = true;
+      throw err;
+    }
+
+    return org.contributorFields;
+  });
 };
 
 module.exports = {

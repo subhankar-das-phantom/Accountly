@@ -4,11 +4,7 @@ const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
 const transactionSchema = new Schema({
-  user: {
-    type: Schema.Types.ObjectId,
-    ref: 'User',
-    required: true // Temporarily preserving
-  },
+
   organizationId: {
     type: Schema.Types.ObjectId,
     ref: 'Organization',
@@ -50,10 +46,9 @@ const transactionSchema = new Schema({
   timestamps: true,
 });
 
-transactionSchema.index({ user: 1, date: -1 });
 transactionSchema.index({ organizationId: 1, date: -1 });
-transactionSchema.index({ user: 1, type: 1 });
-transactionSchema.index({ user: 1, category: 1 });
+transactionSchema.index({ organizationId: 1, type: 1 });
+transactionSchema.index({ organizationId: 1, category: 1 });
 transactionSchema.index({ description: 'text', category: 'text' });
 
 const Transaction = mongoose.model('Transaction', transactionSchema);

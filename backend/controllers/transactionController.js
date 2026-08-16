@@ -22,7 +22,7 @@ const createTransaction = async (req, res, next) => {
 
 const updateTransaction = async (req, res, next) => {
   try {
-    const result = await transactionService.updateTransaction(req.organizationId, req.params.id, req.body);
+    const result = await transactionService.updateTransaction(req.organizationId, req.params.id, req.body, req.user);
     res.json(result);
   } catch (err) {
     next(err);
@@ -31,7 +31,7 @@ const updateTransaction = async (req, res, next) => {
 
 const deleteTransaction = async (req, res, next) => {
   try {
-    const result = await transactionService.deleteTransaction(req.organizationId, req.params.id);
+    const result = await transactionService.deleteTransaction(req.organizationId, req.params.id, req.user);
     res.json(result);
   } catch (err) {
     next(err);

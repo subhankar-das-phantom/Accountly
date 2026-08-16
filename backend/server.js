@@ -24,7 +24,7 @@ const allowedOrigin =
 const corsOptions = {
   origin: allowedOrigin,
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token'],
 };
 app.use(cors(corsOptions));
@@ -98,10 +98,9 @@ const publicRouter = require('./routes/public.routes');
 
 app.use('/api/users', authRouter);
 app.use('/api/organizations', organizationRouter);
-app.use('/api/transactions', reportRouter);
-app.use('/api/transactions', analyticsRouter);
+app.use('/api/reports', reportRouter);
+app.use('/api/analytics', analyticsRouter);
 app.use('/api/transactions', transactionRouter);
-app.use('/api/budgetGoals', budgetRouter);
 app.use('/api/budget', budgetRouter);
 app.use('/api/public', publicRouter);
 // Health route (keep outside /api so limiter skip works)

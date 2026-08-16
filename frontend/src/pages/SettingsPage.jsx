@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { motion } from 'framer-motion';
-import { Globe, Settings as SettingsIcon, Plus, Trash2, Edit2, Loader2, Save, X } from 'lucide-react';
+import { Globe, Settings as SettingsIcon, Plus, Trash2, Edit2, Loader2, Save, X, Users } from 'lucide-react';
 import api from '../services/api';
 import Button from '../components/common/Button';
 import Card from '../components/common/Card';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { IntegrityCheck, AuditLogs } from '../components/AuditLogs';
 
 const SettingsPage = () => {
   const { token } = useContext(AuthContext);
@@ -145,11 +146,23 @@ const SettingsPage = () => {
         {/* Contributor Fields Builder */}
         <ContributorFieldBuilder organization={organization} onRefresh={fetchOrg} />
 
+        {/* Members & Access */}
+        <OrganizationMembers organization={organization} />
+
+        {/* Audit & Integrity */}
+        <div className="pt-8 border-t border-gray-200 dark:border-gray-800">
+          <IntegrityCheck organizationId={organization._id} />
+          <AuditLogs organizationId={organization._id} />
+        </div>
+
+        {/* Danger Zone */}
+        <OrganizationLifecycle organization={organization} onRefresh={fetchOrg} />
       </div>
     </div>
   );
 };
 
+// ... existing components ...
 const ContributorFieldBuilder = ({ organization, onRefresh }) => {
   const [fields, setFields] = useState(organization.contributorFields || []);
   const [showAdd, setShowAdd] = useState(false);
@@ -294,6 +307,200 @@ const ContributorFieldBuilder = ({ organization, onRefresh }) => {
         )}
       </div>
     </Card>
+  );
+};
+
+const OrganizationMembers = ({ organization }) => {
+  const [members, setMembers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState('ADMIN');
+  const [saving, setSaving] = useState(false);
+  const { user } = useContext(AuthContext);
+
+  const fetchMembers = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get(`organizations/${organization._id}/members`);
+      setMembers(res.data);
+    } catch (err) {
+      console.error('Failed to fetch members', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (organization) fetchMembers();
+  }, [organization]);
+
+  const handleAddMember = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await api.post(`organizations/${organization._id}/members`, { email, role });
+      setEmail('');
+      setRole('ADMIN');
+      setShowAdd(false);
+      fetchMembers();
+    } catch (err) {
+      alert(err.response?.data?.message || err.message || 'Failed to add member.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemoveMember = async (memberId) => {
+    if (!window.confirm('Are you sure you want to remove this member?')) return;
+    try {
+      await api.delete(`organizations/${organization._id}/members/${memberId}`);
+      fetchMembers();
+    } catch (err) {
+      alert(err.response?.data?.message || err.message || 'Failed to remove member.');
+    }
+  };
+
+  if (loading) return null;
+
+  const currentMembership = members.find(m => m.userId?._id === user?.id || m.userId === user?.id);
+  const isOwner = currentMembership?.role === 'OWNER';
+
+  return (
+    <Card className="p-6">
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center">
+          <Users className="h-6 w-6 mr-2 text-blue-600" />
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Members & Access</h2>
+            <p className="text-sm text-gray-500">Manage who can access and administer this organization.</p>
+          </div>
+        </div>
+        {isOwner && (
+          <Button onClick={() => setShowAdd(!showAdd)} variant={showAdd ? 'secondary' : 'primary'} size="sm">
+            {showAdd ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4 mr-2" />}
+            {showAdd ? 'Cancel' : 'Add Member'}
+          </Button>
+        )}
+      </div>
+
+      {showAdd && isOwner && (
+        <form onSubmit={handleAddMember} className="mb-8 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">User Email</label>
+              <input required type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="User must already have an Accountly account" className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Role</label>
+              <select value={role} onChange={e => setRole(e.target.value)} className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                <option value="ADMIN">ADMIN (Manage financials & reports)</option>
+                <option value="OWNER">OWNER (Full control including deletion)</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button type="submit" disabled={saving}>
+              {saving ? 'Adding...' : 'Add Member'}
+            </Button>
+          </div>
+        </form>
+      )}
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400">
+          <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-800 dark:text-gray-400">
+            <tr>
+              <th className="px-4 py-3 rounded-tl-lg">User</th>
+              <th className="px-4 py-3">Email</th>
+              <th className="px-4 py-3">Role</th>
+              <th className="px-4 py-3 text-right rounded-tr-lg">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {members.map(member => (
+              <tr key={member._id} className="border-b dark:border-gray-700 last:border-0">
+                <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">
+                  {member.userId?.username} {member.userId?._id === user?.id && '(You)'}
+                </td>
+                <td className="px-4 py-3">{member.userId?.email}</td>
+                <td className="px-4 py-3">
+                  <span className={`px-2 py-1 text-xs rounded-full ${member.role === 'OWNER' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'}`}>
+                    {member.role}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-right">
+                  {isOwner && member.role !== 'OWNER' && (
+                    <button onClick={() => handleRemoveMember(member._id)} className="text-red-500 hover:text-red-700">
+                      Remove
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+};
+
+const OrganizationLifecycle = ({ organization, onRefresh }) => {
+  const [loading, setLoading] = useState(false);
+  const [members, setMembers] = useState([]);
+  const { user } = useContext(AuthContext);
+
+  useEffect(() => {
+    if (organization) {
+      api.get(`organizations/${organization._id}/members`).then(res => setMembers(res.data)).catch(console.error);
+    }
+  }, [organization]);
+
+  const currentMembership = members.find(m => m.userId?._id === user?.id || m.userId === user?.id);
+  const isOwner = currentMembership?.role === 'OWNER';
+
+  if (!isOwner) return null; // Only OWNER can see Danger Zone
+
+  const isArchived = organization.status === 'ARCHIVED';
+
+  const handleAction = async () => {
+    const action = isArchived ? 'restore' : 'archive';
+    if (!window.confirm(`Are you sure you want to ${action} this organization?`)) return;
+
+    setLoading(true);
+    try {
+      await api.post(`organizations/${organization._id}/${action}`);
+      onRefresh();
+    } catch (err) {
+      alert(err.response?.data?.message || `Failed to ${action} organization.`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="pt-8 border-t border-red-200 dark:border-red-900">
+      <Card className="p-6 border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900/10">
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-red-700 dark:text-red-400 mb-2">Danger Zone</h2>
+            <p className="text-sm text-red-600 dark:text-red-300 mb-4 max-w-xl">
+              {isArchived 
+                ? "This organization is currently archived and read-only. Restoring it will allow new financial records to be added and edited."
+                : "Archiving this organization will make it read-only. No new financial records can be added or edited, but all existing data and public pages will remain accessible."
+              }
+            </p>
+          </div>
+          <Button 
+            onClick={handleAction} 
+            disabled={loading}
+            className={isArchived ? "bg-green-600 hover:bg-green-700 text-white border-transparent" : "bg-red-600 hover:bg-red-700 text-white border-transparent"}
+          >
+            {loading ? 'Processing...' : (isArchived ? 'Restore Organization' : 'Archive Organization')}
+          </Button>
+        </div>
+      </Card>
+    </div>
   );
 };
 

@@ -22,6 +22,11 @@ const organizationSchema = new Schema({
     code: { type: String, default: 'INR' },
     locale: { type: String, default: 'en-IN' }
   },
+  status: {
+    type: String,
+    enum: ['ACTIVE', 'ARCHIVED'],
+    default: 'ACTIVE'
+  },
   owner: {
     type: Schema.Types.ObjectId,
     ref: 'User',
@@ -34,7 +39,10 @@ const organizationSchema = new Schema({
       type: String, 
       enum: ['full', 'anonymized', 'anonymous'], 
       default: 'anonymized' 
-    }
+    },
+    fundTarget: { type: Number, min: 0 },
+    publicTarget: { type: Boolean, default: false },
+    isOnboarded: { type: Boolean, default: false }
   },
   contributorFields: [{
     key: { type: String, match: /^[a-zA-Z][a-zA-Z0-9_]*$/ },

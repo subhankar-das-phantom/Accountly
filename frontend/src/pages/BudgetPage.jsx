@@ -33,6 +33,10 @@ const BudgetPage = () => {
   const { currency } = useCurrency();
   const { timeFilter } = useTimeFilter();
 
+  const { data: orgData } = useApi(token ? 'organizations' : null);
+  const activeOrg = orgData && orgData.length > 0 ? orgData[0] : null;
+  const isArchived = activeOrg?.status === 'ARCHIVED';
+
   const { data: budgetGoalsRaw, isLoading: isGoalsLoading, mutate: mutateGoals, isValidating: isGoalsValidating } = useApi(token ? '/budget' : null);
   const { data: budgetProgressRaw, isLoading: isProgressLoading, mutate: mutateProgress, isValidating: isProgressValidating } = useApi(token ? '/budget/progress' : null, { refreshInterval: 30000 });
 
@@ -182,6 +186,7 @@ const BudgetPage = () => {
                 }}
                 className="bg-gradient-to-r from-green-500 to-emerald-600 shadow-lg hover:shadow-xl min-w-[44px]"
                 icon={Plus}
+                disabled={isArchived}
               >
                 <span className="hidden sm:inline">New Budget Goal</span>
               </Button>

@@ -54,10 +54,20 @@ const getBudgetVsActual = async (req, res, next) => {
   }
 };
 
+const checkIntegrity = async (req, res, next) => {
+  try {
+    const result = await analyticsService.checkIntegrity(req.organizationId);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getSummary,
   getStats,
   getChartData,
   getAnalytics,
-  getBudgetVsActual
+  getBudgetVsActual,
+  checkIntegrity
 };
