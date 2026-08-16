@@ -7,6 +7,11 @@ const transactionSchema = new Schema({
   user: {
     type: Schema.Types.ObjectId,
     ref: 'User',
+    required: true // Temporarily preserving
+  },
+  organizationId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Organization',
     required: true
   },
   type: {
@@ -34,6 +39,7 @@ const transactionSchema = new Schema({
 });
 
 transactionSchema.index({ user: 1, date: -1 });
+transactionSchema.index({ organizationId: 1, date: -1 });
 transactionSchema.index({ user: 1, type: 1 });
 transactionSchema.index({ user: 1, category: 1 });
 transactionSchema.index({ description: 'text', category: 'text' });
