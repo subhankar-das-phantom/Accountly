@@ -88,6 +88,7 @@ process.on('SIGINT', async () => {
 
 // Routers
 const authRouter = require('./routes/auth.routes');
+const organizationRouter = require('./routes/organization.routes');
 const transactionRouter = require('./routes/transaction.routes');
 const analyticsRouter = require('./routes/analytics.routes');
 const reportRouter = require('./routes/report.routes');
@@ -95,6 +96,7 @@ const budgetRouter = require('./routes/budget.routes');
 
 
 app.use('/api/users', authRouter);
+app.use('/api/organizations', organizationRouter);
 app.use('/api/transactions', reportRouter);
 app.use('/api/transactions', analyticsRouter);
 app.use('/api/transactions', transactionRouter);
