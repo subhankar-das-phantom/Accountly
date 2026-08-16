@@ -29,7 +29,25 @@ const getChartData = async (req, res, next) => {
 
 const getAnalytics = async (req, res, next) => {
   try {
-    const result = await analyticsService.getAnalytics(req.organizationId);
+    const filter = {
+      periodType: req.query.periodType,
+      startDate: req.query.startDate,
+      endDate: req.query.endDate
+    };
+    const result = await analyticsService.getAnalytics(req.organizationId, filter);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const getBudgetVsActual = async (req, res, next) => {
+  try {
+    const filter = {
+      month: parseInt(req.query.month),
+      year: parseInt(req.query.year)
+    };
+    const result = await analyticsService.getBudgetVsActual(req.organizationId, filter);
     res.json(result);
   } catch (err) {
     next(err);
@@ -40,5 +58,6 @@ module.exports = {
   getSummary,
   getStats,
   getChartData,
-  getAnalytics
+  getAnalytics,
+  getBudgetVsActual
 };

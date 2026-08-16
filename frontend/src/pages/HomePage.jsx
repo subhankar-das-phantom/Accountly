@@ -30,30 +30,32 @@ import { formatCurrency } from "../utils/currency";
 import Button from "../components/common/Button";
 import Card from "../components/common/Card";
 import PublicSettingsModal from "../components/PublicSettingsModal";
+import ExcelExportButton from "../components/ExcelExportButton";
 import { Globe } from "lucide-react";
 
 const HomePage = () => {
   const { token, user } = useContext(AuthContext);
   const { timeFilter, setTimeFilter } = useTimeFilter();
 
+  const now = new Date();
   const { data: allTransactionsRaw, isLoading: isLoadingTransactions, mutate: mutateTransactions, isValidating: isValidatingTransactions } = useApi(token ? 'transactions' : null);
-  const { data: statsRaw, isLoading: isLoadingStats, isValidating: isValidatingStats } = useApi(token ? 'transactions/stats' : null);
-  const { data: chartDataRaw, isLoading: isLoadingChart, isValidating: isValidatingChart } = useApi(token ? 'transactions/chart-data' : null);
+  const { data: analyticsData, isLoading: isLoadingStats, isValidating: isValidatingStats } = useApi(token ? `transactions/analytics?periodType=${timeFilter}` : null);
+  const { data: budgetData, isLoading: isLoadingBudget, isValidating: isValidatingBudget } = useApi(token ? `transactions/budget-vs-actual?month=${now.getMonth() + 1}&year=${now.getFullYear()}` : null);
 
   const allTransactions = Array.isArray(allTransactionsRaw?.transactions || allTransactionsRaw) ? (allTransactionsRaw?.transactions || allTransactionsRaw) : [];
   const recentTransactions = allTransactions.slice(0, 5);
-  const stats = statsRaw || {
-    totalCollectedAllTime: 0,
-    totalSpentAllTime: 0,
-    netBalanceAllTime: 0,
-    transactionCount: 0,
-    currentMonth: { collected: 0, spent: 0, netBalance: 0 },
-    previousMonth: { collected: 0, spent: 0, netBalance: 0 },
+  
+  const stats = analyticsData || {
+    summary: { totalCollected: 0, totalSpent: 0, remainingBalance: 0, contributionCount: 0, expenseCount: 0 },
+    contributions: { byCategory: [] },
+    expenses: { byCategory: [] },
+    comparison: { collectedChange: 0, spentChange: 0 }
   };
-  const chartData = chartDataRaw || [];
+  
+  const chartData = stats.expenses.byCategory.map(c => ({ name: c.category || 'Other', value: c.amount }));
 
-  const isLoading = isLoadingTransactions || isLoadingStats || isLoadingChart;
-  const isRefreshing = isValidatingTransactions || isValidatingStats || isValidatingChart;
+  const isLoading = isLoadingTransactions || isLoadingStats || isLoadingBudget;
+  const isRefreshing = isValidatingTransactions || isValidatingStats || isValidatingBudget;
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [editTransaction, setEditTransaction] = useState(null);
@@ -173,55 +175,11 @@ const HomePage = () => {
 
 
 
-  // Helper to calculate percentage change
-  const calculatePercentageChange = (current, previous) => {
-    // Handle edge cases
-    if (previous === 0) {
-      if (current === 0) return "0%";
-      return current > 0 ? "New!" : "New!"; // Show "New!" instead of infinity
-    }
-
-    const change = ((current - previous) / previous) * 100;
-    const formattedChange =
-      Math.abs(change) >= 1000
-        ? change > 0
-          ? "+999%+"
-          : "-999%+" // Cap extremely high percentages
-        : `${change > 0 ? "+" : ""}${change.toFixed(1)}%`;
-
-    return formattedChange;
-  };
-
-  // Calculate changes for display (based on current month vs previous month from backend)
-  const collectedChange =
-    stats.currentMonth && stats.previousMonth && stats.currentMonth.collected !== undefined
-      ? calculatePercentageChange(
-          stats.currentMonth.collected,
-          stats.previousMonth.collected
-        )
-      : "N/A";
-
-  const spentChange =
-    stats.currentMonth && stats.previousMonth && stats.currentMonth.spent !== undefined
-      ? calculatePercentageChange(
-          stats.currentMonth.spent,
-          stats.previousMonth.spent
-        )
-      : "N/A";
-
-  const netBalanceChange =
-    stats.currentMonth && stats.previousMonth
-      ? calculatePercentageChange(
-          stats.currentMonth.netBalance,
-          stats.previousMonth.netBalance
-        )
-      : "N/A";
-
   // Refresh data
   const refreshData = async () => {
     mutateTransactions();
-    globalMutate('transactions/stats');
-    globalMutate('transactions/chart-data');
+    globalMutate(`transactions/analytics?periodType=${timeFilter}`);
+    globalMutate(`transactions/budget-vs-actual?month=${now.getMonth() + 1}&year=${now.getFullYear()}`);
   };
 
   // Handle form submission
@@ -263,59 +221,6 @@ const HomePage = () => {
     }
   };
 
-  // Calculate filtered stats based on time filter
-  const getFilteredStats = () => {
-    const now = new Date();
-    let filteredTransactions = allTransactions;
-
-    switch (timeFilter) {
-      case "thisWeek":
-        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        filteredTransactions = allTransactions.filter(
-          (t) => {
-            const date = new Date(t.date);
-            return date >= weekAgo && date <= now;
-          }
-        );
-        break;
-      case "thisMonth":
-        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        filteredTransactions = allTransactions.filter(
-          (t) => {
-            const date = new Date(t.date);
-            return date >= monthStart && date <= now;
-          }
-        );
-        break;
-      case "thisYear":
-        const yearStart = new Date(now.getFullYear(), 0, 1);
-        filteredTransactions = allTransactions.filter(
-          (t) => {
-            const date = new Date(t.date);
-            return date >= yearStart && date <= now;
-          }
-        );
-        break;
-      default:
-        break;
-    }
-
-    const collected = filteredTransactions
-      .filter((t) => t.type === "contribution")
-      .reduce((sum, t) => sum + parseFloat(t.amount), 0);
-
-    const spent = filteredTransactions
-      .filter((t) => t.type === "expense")
-      .reduce((sum, t) => sum + parseFloat(t.amount), 0);
-
-    return {
-      collected,
-      spent,
-      netBalance: collected - spent,
-      count: filteredTransactions.length,
-    };
-  };
-
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -324,7 +229,19 @@ const HomePage = () => {
     }
   }, [token, navigate]);
 
-  const filteredStats = getFilteredStats();
+  const filteredStats = {
+    collected: stats.summary.totalCollected,
+    spent: stats.summary.totalSpent,
+    netBalance: stats.summary.remainingBalance,
+    count: stats.summary.contributionCount + stats.summary.expenseCount
+  };
+
+  const formatTrend = (val) => {
+    if (val > 0) return `+${val.toFixed(1)}%`;
+    if (val < 0) return `${val.toFixed(1)}%`;
+    return '0%';
+  };
+
 
   if (isLoading) {
     return (
@@ -426,21 +343,21 @@ const HomePage = () => {
               value={filteredStats.collected}
               icon={TrendingUp}
               color="green"
-              change={collectedChange}
+              change={formatTrend(stats.comparison?.collectedChange)}
             />
             <StatsCard
               title="Total Spent"
               value={filteredStats.spent}
               icon={TrendingDown}
               color="red"
-              change={spentChange}
+              change={formatTrend(stats.comparison?.spentChange)}
             />
             <StatsCard
               title="Remaining Balance"
               value={filteredStats.netBalance}
               icon={Wallet}
               color={filteredStats.netBalance >= 0 ? "green" : "red"}
-              change={netBalanceChange}
+              change="Net"
             />
             <StatsCard
               title="Total Records"
@@ -470,12 +387,41 @@ const HomePage = () => {
             </motion.div>
           </div>
 
+          {/* Budget vs Actual (Admin Only) */}
+          {budgetData && budgetData.breakdown && budgetData.breakdown.length > 0 && (
+            <motion.div variants={itemVariants}>
+              <Card className="p-4 sm:p-6">
+                <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white mb-4">
+                  Budget vs Actual (This Month)
+                </h2>
+                <div className="space-y-4">
+                  {budgetData.breakdown.map((b, i) => (
+                    <div key={i} className="flex flex-col space-y-1">
+                      <div className="flex justify-between text-sm text-gray-700 dark:text-gray-300">
+                        <span>{b.category}</span>
+                        <span>{formatCurrency(b.actual)} / {formatCurrency(b.budget)}</span>
+                      </div>
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                        <div 
+                          className={`h-2.5 rounded-full ${b.utilizationPercentage > 100 ? 'bg-red-500' : 'bg-blue-600'}`} 
+                          style={{ width: `${Math.min(b.utilizationPercentage, 100)}%` }}>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </motion.div>
+          )}
+
           {/* Quick Actions */}
           <Card className="p-4 sm:p-6">
             <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white mb-4">
               Quick Actions
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <ExcelExportButton organizationId={user?.organizations?.[0]} className="w-full justify-start p-3 sm:p-4 h-auto text-left flex-col items-start border-gray-200 dark:border-gray-700" />
+              
               <QuickActionCard
                 title="Download PDF Report"
                 description="Comprehensive financial analysis"

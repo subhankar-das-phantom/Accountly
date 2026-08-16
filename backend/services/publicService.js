@@ -35,8 +35,8 @@ const formatContributorName = (name, policy) => {
 const getOrganizationSummary = async (slug) => {
   const org = await getOrganizationBySlug(slug);
   
-  // Reuse analytics service for calculations
-  const analytics = await analyticsService.getAnalytics(org._id);
+  // Reuse canonical analytics service for calculations
+  const analytics = await analyticsService.getAnalytics(org._id, { periodType: 'all' });
   
   return {
     organization: {
@@ -45,16 +45,16 @@ const getOrganizationSummary = async (slug) => {
       currency: org.currency
     },
     summary: {
-      totalCollected: analytics.periods.allTime.collected,
-      totalSpent: analytics.periods.allTime.spent,
-      remainingBalance: analytics.periods.allTime.remainingBalance,
-      contributionCount: analytics.periods.allTime.contributionCount,
-      expenseCount: analytics.periods.allTime.expenseCount
+      totalCollected: analytics.summary.totalCollected,
+      totalSpent: analytics.summary.totalSpent,
+      remainingBalance: analytics.summary.remainingBalance,
+      contributionCount: analytics.summary.contributionCount,
+      expenseCount: analytics.summary.expenseCount
     },
     analytics: {
-      topExpenseCategories: analytics.topExpenseCategories,
-      topContributionCategories: analytics.topContributionCategories,
-      monthlyTrends: analytics.monthlyTrends
+      topExpenseCategories: analytics.expenses.byCategory,
+      topContributionCategories: analytics.contributions.byCategory,
+      monthlyTrends: analytics.expenses.trends // It's shared trends (collected/spent/balance)
     }
   };
 };

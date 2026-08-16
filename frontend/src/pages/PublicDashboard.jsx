@@ -18,7 +18,7 @@ import { useCurrency } from '../context/CurrencyContext';
 import { formatCurrency } from '../utils/currency';
 import Chart from '../components/Chart';
 
-const StatsCard = ({ title, value, icon: Icon, color, subtitle }) => {
+const StatsCard = ({ title, value, icon: Icon, color, subtitle, explanation }) => {
   const { currency } = useCurrency();
   const colorClasses = {
     emerald: "from-emerald-500 to-teal-600 text-emerald-700 bg-emerald-50 dark:bg-emerald-600 dark:text-white",
@@ -27,7 +27,7 @@ const StatsCard = ({ title, value, icon: Icon, color, subtitle }) => {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 border border-gray-100 dark:border-gray-700 transition-all duration-200">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 border border-gray-100 dark:border-gray-700 transition-all duration-200 group">
       <div className="flex items-center justify-between mb-4">
         <div className={`p-3 rounded-xl bg-gradient-to-r ${colorClasses[color].split(" ")[0]} ${colorClasses[color].split(" ")[1]}`}>
           <Icon className="h-6 w-6 text-white" />
@@ -36,7 +36,17 @@ const StatsCard = ({ title, value, icon: Icon, color, subtitle }) => {
           {subtitle}
         </div>
       </div>
-      <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">{title}</h3>
+      <div className="flex items-center gap-1 mb-1">
+        <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400">{title}</h3>
+        {explanation && (
+          <div className="relative flex items-center">
+            <AlertCircle className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help" />
+            <div className="absolute bottom-full mb-2 hidden group-hover:block w-48 bg-gray-900 text-white text-xs rounded p-2 z-10 shadow-lg left-1/2 -translate-x-1/2 text-center">
+              {explanation}
+            </div>
+          </div>
+        )}
+      </div>
       <p className="text-base sm:text-2xl font-bold text-gray-900 dark:text-white truncate">
         {formatCurrency(value, currency.locale, currency.code)}
       </p>
@@ -195,21 +205,24 @@ const PublicDashboard = () => {
       value: summary.totalCollected,
       icon: TrendingUp,
       color: "blue",
-      subtitle: `${summary.contributionCount} Contributions`
+      subtitle: `${summary.contributionCount} Contributions`,
+      explanation: "Total funds received by the organization across all time."
     },
     {
       title: "Total Spent",
       value: summary.totalSpent,
       icon: TrendingDown,
       color: "red",
-      subtitle: `${summary.expenseCount} Expenses`
+      subtitle: `${summary.expenseCount} Expenses`,
+      explanation: "Total funds spent by the organization across all time."
     },
     {
       title: "Remaining Balance",
       value: summary.remainingBalance,
       icon: Building2,
       color: summary.remainingBalance >= 0 ? "emerald" : "red",
-      subtitle: "Current Funds"
+      subtitle: "Current Funds",
+      explanation: "Total Collected minus Total Spent."
     }
   ];
 
@@ -232,6 +245,42 @@ const PublicDashboard = () => {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         
+        {/* Fund Flow Visualization */}
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 border border-gray-100 dark:border-gray-700 text-center">
+          <h2 className="text-lg font-bold text-gray-800 dark:text-white mb-6">Fund Flow Transparency</h2>
+          <div className="flex flex-col md:flex-row items-center justify-center space-y-4 md:space-y-0 md:space-x-8">
+            <div className="flex flex-col items-center">
+              <div className="w-24 h-24 rounded-full bg-blue-100 dark:bg-blue-900/30 border-4 border-blue-500 flex items-center justify-center text-blue-600 dark:text-blue-400 mb-2">
+                <TrendingUp className="w-10 h-10" />
+              </div>
+              <span className="font-semibold text-gray-700 dark:text-gray-300">Collected</span>
+            </div>
+            
+            <div className="h-12 w-1 bg-gray-300 dark:bg-gray-700 md:h-1 md:w-24 rounded-full relative">
+              <div className="absolute right-1/2 top-1/2 -translate-y-1/2 translate-x-1/2 md:translate-x-0 md:right-0 md:translate-y-1/2 w-3 h-3 bg-gray-400 rotate-45 transform md:-mt-1.5 md:-mr-1.5 md:border-t-2 md:border-r-2 md:bg-transparent md:border-gray-400 hidden md:block"></div>
+            </div>
+
+            <div className="flex flex-col items-center relative">
+              <div className="w-32 h-32 rounded-full bg-emerald-100 dark:bg-emerald-900/30 border-4 border-emerald-500 flex items-center justify-center text-emerald-600 dark:text-emerald-400 mb-2 shadow-lg">
+                <Building2 className="w-12 h-12" />
+              </div>
+              <span className="font-bold text-lg text-gray-900 dark:text-white">Organization Fund</span>
+              <span className="text-sm font-medium text-emerald-600">Balance: {summary.remainingBalance.toLocaleString()}</span>
+            </div>
+
+            <div className="h-12 w-1 bg-gray-300 dark:bg-gray-700 md:h-1 md:w-24 rounded-full relative">
+              <div className="absolute right-1/2 top-1/2 -translate-y-1/2 translate-x-1/2 md:translate-x-0 md:right-0 md:translate-y-1/2 w-3 h-3 bg-gray-400 rotate-45 transform md:-mt-1.5 md:-mr-1.5 md:border-t-2 md:border-r-2 md:bg-transparent md:border-gray-400 hidden md:block"></div>
+            </div>
+
+            <div className="flex flex-col items-center">
+              <div className="w-24 h-24 rounded-full bg-red-100 dark:bg-red-900/30 border-4 border-red-500 flex items-center justify-center text-red-600 dark:text-red-400 mb-2">
+                <TrendingDown className="w-10 h-10" />
+              </div>
+              <span className="font-semibold text-gray-700 dark:text-gray-300">Spent</span>
+            </div>
+          </div>
+        </div>
+
         {/* Summary Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {stats.map((stat, idx) => (

@@ -16,4 +16,9 @@ router.post('/:id/contributor-fields', auth, fieldController.addField);
 router.put('/:id/contributor-fields/:key', auth, fieldController.updateField);
 router.delete('/:id/contributor-fields/:key', auth, fieldController.deleteField);
 
+// Reports
+const reportController = require('../controllers/reportController');
+router.get('/:id/reports/pdf', auth, reportController.generatePdfReport);
+router.get('/:id/reports/excel', auth, reportController.generateExcelReport);
+
 module.exports = router;

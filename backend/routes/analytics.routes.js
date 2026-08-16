@@ -15,4 +15,7 @@ router.get('/chart-data', auth, resolveOrganization, analyticsController.getChar
 // Get comprehensive analytics data
 router.get('/analytics', auth, resolveOrganization, analyticsController.getAnalytics);
 
+// Get budget vs actual
+router.get('/budget-vs-actual', auth, resolveOrganization, analyticsController.getBudgetVsActual);
+
 module.exports = router;

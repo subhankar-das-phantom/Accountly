@@ -1,300 +1,266 @@
+const mongoose = require('mongoose');
 const Transaction = require('../models/transaction.model');
+const Organization = require('../models/organization.model');
 const { cache, getCacheKey } = require('../utils/cache');
 
-const getSummary = async (organizationId) => {
-  const cacheKey = getCacheKey('summary', organizationId);
+/**
+ * The Canonical Analytics Engine
+ * Provides a single source of truth for all Accountly financial calculations.
+ */
+const getAnalytics = async (organizationId, filter = {}) => {
+  const { periodType = 'all', startDate, endDate } = filter;
+  const cacheKey = getCacheKey('canonical_analytics', `${organizationId}_${periodType}_${startDate}_${endDate}`);
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
-  const summary = await Transaction.aggregate([
-    { $match: { organizationId: organizationId, type: 'expense' } },
-    { $group: { _id: '$category', value: { $sum: '$amount' } } },
-    { $project: { name: '$_id', value: 1, _id: 0 } },
-  ]);
-  
-  cache.set(cacheKey, summary);
-  return summary;
-};
-
-const getStats = async (organizationId) => {
-  const cacheKey = getCacheKey('stats', organizationId);
-  const cached = cache.get(cacheKey);
-  if (cached) return cached;
-
-  const transactions = await Transaction.find({ organizationId: organizationId });
+  const orgId = new mongoose.Types.ObjectId(organizationId);
+  let matchQuery = { organizationId: orgId };
+  let prevMatchQuery = null;
 
   const now = new Date();
+  let start = null, end = null;
+  let prevStart = null, prevEnd = null;
 
-  // Current month
-  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  if (periodType === 'thisMonth') {
+    start = new Date(now.getFullYear(), now.getMonth(), 1);
+    end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    prevEnd = new Date(now.getFullYear(), now.getMonth(), 1);
+  } else if (periodType === 'lastMonth') {
+    start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    end = new Date(now.getFullYear(), now.getMonth(), 1);
+    prevStart = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+    prevEnd = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  } else if (periodType === 'thisWeek') {
+    start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
+    end = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + 7);
+    prevStart = new Date(start.getTime() - 7 * 24 * 60 * 60 * 1000);
+    prevEnd = start;
+  } else if (periodType === 'thisYear') {
+    start = new Date(now.getFullYear(), 0, 1);
+    end = new Date(now.getFullYear() + 1, 0, 1);
+    prevStart = new Date(now.getFullYear() - 1, 0, 1);
+    prevEnd = new Date(now.getFullYear(), 0, 1);
+  } else if (periodType === 'custom' && startDate && endDate) {
+    start = new Date(startDate);
+    end = new Date(endDate);
+    const duration = end.getTime() - start.getTime();
+    prevStart = new Date(start.getTime() - duration);
+    prevEnd = start;
+  }
 
-  // Previous month
-  const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const currentMonthStartForPrev = new Date(now.getFullYear(), now.getMonth(), 1);
+  if (start && end) {
+    matchQuery.date = { $gte: start, $lt: end };
+    prevMatchQuery = {
+      organizationId: orgId,
+      date: { $gte: prevStart, $lt: prevEnd }
+    };
+  }
 
-  const currentMonthTransactions = transactions.filter(t => {
-    const transactionDate = new Date(t.date);
-    return transactionDate >= currentMonthStart && transactionDate < nextMonthStart;
+  // 1. Current Period Stats
+  const currentStatsPromise = Transaction.aggregate([
+    { $match: matchQuery },
+    {
+      $facet: {
+        summary: [
+          {
+            $group: {
+              _id: '$type',
+              totalAmount: { $sum: '$amount' },
+              count: { $sum: 1 },
+              maxAmount: { $max: '$amount' }
+            }
+          }
+        ],
+        expensesByCategory: [
+          { $match: { type: 'expense' } },
+          { $group: { _id: '$category', amount: { $sum: '$amount' }, count: { $sum: 1 } } },
+          { $sort: { amount: -1 } },
+          { $project: { category: '$_id', amount: 1, count: 1, _id: 0 } }
+        ],
+        contributionsByCategory: [
+          { $match: { type: 'contribution' } },
+          { $group: { _id: '$category', amount: { $sum: '$amount' }, count: { $sum: 1 } } },
+          { $sort: { amount: -1 } },
+          { $project: { category: '$_id', amount: 1, count: 1, _id: 0 } }
+        ],
+        monthlyTrends: [
+          {
+            $group: {
+              _id: {
+                year: { $year: '$date' },
+                month: { $month: '$date' },
+                type: '$type'
+              },
+              amount: { $sum: '$amount' }
+            }
+          },
+          {
+            $group: {
+              _id: { year: '$_id.year', month: '$_id.month' },
+              totals: {
+                $push: { type: '$_id.type', amount: '$amount' }
+              }
+            }
+          },
+          { $sort: { '_id.year': -1, '_id.month': -1 } },
+          { $limit: 12 }
+        ]
+      }
+    }
+  ]);
+
+  // 2. Previous Period Stats (for comparison)
+  const prevStatsPromise = prevMatchQuery ? Transaction.aggregate([
+    { $match: prevMatchQuery },
+    {
+      $group: {
+        _id: '$type',
+        totalAmount: { $sum: '$amount' }
+      }
+    }
+  ]) : Promise.resolve([]);
+
+  const [currentResult, prevResult] = await Promise.all([currentStatsPromise, prevStatsPromise]);
+  const current = currentResult[0];
+
+  let totalCollected = 0, totalSpent = 0, contributionCount = 0, expenseCount = 0;
+  let maxContribution = 0, maxExpense = 0;
+
+  current.summary.forEach(s => {
+    if (s._id === 'contribution') {
+      totalCollected = s.totalAmount || 0;
+      contributionCount = s.count || 0;
+      maxContribution = s.maxAmount || 0;
+    } else if (s._id === 'expense') {
+      totalSpent = s.totalAmount || 0;
+      expenseCount = s.count || 0;
+      maxExpense = s.maxAmount || 0;
+    }
   });
 
-  const previousMonthTransactions = transactions.filter(t => {
-    const transactionDate = new Date(t.date);
-    return transactionDate >= previousMonthStart && transactionDate < currentMonthStartForPrev;
-  });
-
-  // Calculate all-time stats
-  const contributions = transactions.filter(t => t.type === 'contribution');
-  const expenses = transactions.filter(t => t.type === 'expense');
-
-  const totalCollected = contributions.reduce((sum, t) => sum + parseFloat(t.amount), 0);
-  const totalSpent = expenses.reduce((sum, t) => sum + parseFloat(t.amount), 0);
   const remainingBalance = totalCollected - totalSpent;
+  const spendingRatio = totalCollected > 0 ? (totalSpent / totalCollected) * 100 : 0;
+  const remainingRatio = totalCollected > 0 ? (remainingBalance / totalCollected) * 100 : (totalCollected === 0 && totalSpent > 0 ? -100 : 0);
 
-  // Calculate current month stats
-  const currentMonthCollected = currentMonthTransactions
-    .filter(t => t.type === 'contribution')
-    .reduce((sum, t) => sum + parseFloat(t.amount), 0);
-  const currentMonthSpent = currentMonthTransactions
-    .filter(t => t.type === 'expense')
-    .reduce((sum, t) => sum + parseFloat(t.amount), 0);
-  const currentMonthRemaining = currentMonthCollected - currentMonthSpent;
+  let prevCollected = 0, prevSpent = 0;
+  prevResult.forEach(s => {
+    if (s._id === 'contribution') prevCollected = s.totalAmount || 0;
+    if (s._id === 'expense') prevSpent = s.totalAmount || 0;
+  });
 
-  // Calculate previous month stats
-  const previousMonthCollected = previousMonthTransactions
-    .filter(t => t.type === 'contribution')
-    .reduce((sum, t) => sum + parseFloat(t.amount), 0);
-  const previousMonthSpent = previousMonthTransactions
-    .filter(t => t.type === 'expense')
-    .reduce((sum, t) => sum + parseFloat(t.amount), 0);
-  const previousMonthRemaining = previousMonthCollected - previousMonthSpent;
+  const collectedChange = prevCollected > 0 ? ((totalCollected - prevCollected) / prevCollected) * 100 : (totalCollected > 0 ? 100 : 0);
+  const spentChange = prevSpent > 0 ? ((totalSpent - prevSpent) / prevSpent) * 100 : (totalSpent > 0 ? 100 : 0);
+
+  // Format monthly trends
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const trends = current.monthlyTrends.map(m => {
+    let col = 0, spn = 0;
+    m.totals.forEach(t => {
+      if (t.type === 'contribution') col = t.amount;
+      if (t.type === 'expense') spn = t.amount;
+    });
+    return {
+      month: `${monthNames[m._id.month - 1]} ${m._id.year}`,
+      collected: col,
+      spent: spn,
+      remainingBalance: col - spn
+    };
+  }).reverse(); // chronological
 
   const response = {
-    totalCollected,
-    totalSpent,
-    remainingBalance,
-    contributionCount: contributions.length,
-    expenseCount: expenses.length,
-    transactionCount: transactions.length,
-    currentMonth: {
-      collected: currentMonthCollected,
-      spent: currentMonthSpent,
-      remainingBalance: currentMonthRemaining,
+    period: {
+      type: periodType,
+      start,
+      end
     },
-    previousMonth: {
-      collected: previousMonthCollected,
-      spent: previousMonthSpent,
-      remainingBalance: previousMonthRemaining,
+    summary: {
+      totalCollected,
+      totalSpent,
+      remainingBalance,
+      contributionCount,
+      expenseCount
     },
+    contributions: {
+      average: contributionCount > 0 ? totalCollected / contributionCount : 0,
+      largest: maxContribution,
+      byCategory: current.contributionsByCategory,
+      trends
+    },
+    expenses: {
+      average: expenseCount > 0 ? totalSpent / expenseCount : 0,
+      largest: maxExpense,
+      byCategory: current.expensesByCategory,
+      trends
+    },
+    ratios: {
+      spendingRatio,
+      remainingRatio
+    },
+    comparison: {
+      previousPeriod: prevMatchQuery ? { start: prevStart, end: prevEnd } : null,
+      prevCollected,
+      prevSpent,
+      collectedChange,
+      spentChange
+    }
   };
 
   cache.set(cacheKey, response);
   return response;
 };
 
-const getChartData = async (organizationId) => {
-  const cacheKey = getCacheKey('chart-data', organizationId);
-  const cached = cache.get(cacheKey);
-  if (cached) return cached;
+// ==========================================
+// COMPATIBILITY WRAPPERS
+// These map the old API contract to the new canonical analytics engine.
+// They will be removed in a future cleanup step.
+// ==========================================
 
-  const transactions = await Transaction.find({ 
-    organizationId: organizationId, 
-    type: 'expense' 
-  });
-  
-  // Group by category
-  const categoryData = {};
-  transactions.forEach(t => {
-    categoryData[t.category] = (categoryData[t.category] || 0) + parseFloat(t.amount);
-  });
-  
-  // Convert to chart format
-  const chartData = Object.entries(categoryData).map(([name, value]) => ({
-    name,
-    value
+const getSummary = async (organizationId) => {
+  const analytics = await getAnalytics(organizationId, { periodType: 'all' });
+  // Map back to [{ name: category, value: amount }] for expenses
+  return analytics.expenses.byCategory.map(c => ({
+    name: c.category || 'Other',
+    value: c.amount
   }));
-  
-  cache.set(cacheKey, chartData);
-  return chartData;
 };
 
-const getAnalytics = async (organizationId) => {
-  const cacheKey = getCacheKey('analytics', organizationId);
-  const cached = cache.get(cacheKey);
-  if (cached) return cached;
-
-  const transactions = await Transaction.find({ organizationId: organizationId }).sort({ date: 'desc' });
-
-  // Return empty analytics data structure if no transactions
-  if (transactions.length === 0) {
-    const emptyAnalytics = {
-      periods: {
-        allTime: { collected: 0, spent: 0, remainingBalance: 0, count: 0, avgTransaction: 0, retentionRate: 0 },
-        thisMonth: { collected: 0, spent: 0, remainingBalance: 0, count: 0, avgTransaction: 0, retentionRate: 0 },
-        lastMonth: { collected: 0, spent: 0, remainingBalance: 0, count: 0, avgTransaction: 0, retentionRate: 0 },
-        thisYear: { collected: 0, spent: 0, remainingBalance: 0, count: 0, avgTransaction: 0, retentionRate: 0 }
-      },
-      categoryBreakdown: {},
-      monthlyTrends: [],
-      topExpenseCategories: [],
-      topContributionCategories: [],
-      insights: ['Start adding financial records to see insights!'],
-      reportDate: new Date().toISOString(),
-      totalTransactions: 0
-    };
-    cache.set(cacheKey, emptyAnalytics);
-    return emptyAnalytics;
-  }
-
-  const analyticsData = calculateFinancialStats(transactions);
-  cache.set(cacheKey, analyticsData);
-  return analyticsData;
+const getChartData = async (organizationId) => {
+  // Chart data was essentially the same as summary
+  return getSummary(organizationId);
 };
 
-// Helper function to calculate comprehensive financial statistics
-function calculateFinancialStats(transactions) {
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth();
-  
-  // Date ranges
-  const thisMonth = new Date(currentYear, currentMonth, 1);
-  const nextMonth = new Date(currentYear, currentMonth + 1, 1);
-  const lastMonth = new Date(currentYear, currentMonth - 1, 1);
-  const thisYear = new Date(currentYear, 0, 1);
-  const nextYear = new Date(currentYear + 1, 0, 1);
-  
-  // Filter transactions by time periods
-  const thisMonthTxns = transactions.filter(t => {
-    const date = new Date(t.date);
-    return date >= thisMonth && date < nextMonth;
-  });
-  const lastMonthTxns = transactions.filter(t => {
-    const date = new Date(t.date);
-    return date >= lastMonth && date < thisMonth;
-  });
-  const thisYearTxns = transactions.filter(t => {
-    const date = new Date(t.date);
-    return date >= thisYear && date < nextYear;
-  });
-  
-  // Calculate totals by period
-  const periods = {
-    allTime: calculatePeriodStats(transactions),
-    thisMonth: calculatePeriodStats(thisMonthTxns),
-    lastMonth: calculatePeriodStats(lastMonthTxns),
-    thisYear: calculatePeriodStats(thisYearTxns)
-  };
-  
-  // Category breakdown
-  const categoryBreakdown = {};
-  transactions.forEach(t => {
-    if (!categoryBreakdown[t.category]) {
-      categoryBreakdown[t.category] = { collected: 0, spent: 0, count: 0 };
+const getStats = async (organizationId) => {
+  const allTime = await getAnalytics(organizationId, { periodType: 'all' });
+  const thisMonth = await getAnalytics(organizationId, { periodType: 'thisMonth' });
+  const lastMonth = await getAnalytics(organizationId, { periodType: 'lastMonth' });
+
+  return {
+    totalCollected: allTime.summary.totalCollected,
+    totalSpent: allTime.summary.totalSpent,
+    remainingBalance: allTime.summary.remainingBalance,
+    contributionCount: allTime.summary.contributionCount,
+    expenseCount: allTime.summary.expenseCount,
+    transactionCount: allTime.summary.contributionCount + allTime.summary.expenseCount,
+    currentMonth: {
+      collected: thisMonth.summary.totalCollected,
+      spent: thisMonth.summary.totalSpent,
+      remainingBalance: thisMonth.summary.remainingBalance,
+    },
+    previousMonth: {
+      collected: lastMonth.summary.totalCollected,
+      spent: lastMonth.summary.totalSpent,
+      remainingBalance: lastMonth.summary.remainingBalance,
     }
-    if (t.type === 'contribution') categoryBreakdown[t.category].collected += parseFloat(t.amount);
-    if (t.type === 'expense') categoryBreakdown[t.category].spent += parseFloat(t.amount);
-    categoryBreakdown[t.category].count += 1;
-  });
-  
-  // Monthly trends (last 12 months)
-  const monthlyTrends = [];
-  for (let i = 11; i >= 0; i--) {
-    const month = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const monthKey = month.toLocaleDateString('en-US', { month: 'short' });
-    const nextMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
-    
-    const monthTransactions = transactions.filter(t => {
-      const date = new Date(t.date);
-      return date >= month && date < nextMonth;
-    });
-    
-    monthlyTrends.push({
-      month: monthKey,
-      ...calculatePeriodStats(monthTransactions)
-    });
-  }
-  
-  // Top categories
-  const topExpenseCategories = Object.entries(categoryBreakdown)
-    .map(([cat, data]) => ({ category: cat, amount: data.spent, count: data.count }))
-    .filter(item => item.amount > 0)
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 5);
-    
-  const topContributionCategories = Object.entries(categoryBreakdown)
-    .map(([cat, data]) => ({ category: cat, amount: data.collected, count: data.count }))
-    .filter(item => item.amount > 0)
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 5);
-  
-  // Financial insights
-  const insights = calculateFinancialInsights(periods);
-  
-  return {
-    periods,
-    categoryBreakdown,
-    monthlyTrends,
-    topExpenseCategories,
-    topContributionCategories,
-    insights,
-    reportDate: new Date().toISOString(),
-    totalTransactions: transactions.length
   };
-}
+};
 
-function calculatePeriodStats(transactions) {
-  const collected = transactions
-    .filter(t => t.type === 'contribution')
-    .reduce((sum, t) => sum + parseFloat(t.amount), 0);
-  
-  const spent = transactions
-    .filter(t => t.type === 'expense')
-    .reduce((sum, t) => sum + parseFloat(t.amount), 0);
-  
-  const contributionCount = transactions.filter(t => t.type === 'contribution').length;
-  const expenseCount = transactions.filter(t => t.type === 'expense').length;
+const calculateFinancialStats = (transactions) => {
+  // Deprecated: this was a large synchronous helper. No longer used by getAnalytics.
+  return {}; 
+};
 
-  return {
-    collected,
-    spent,
-    remainingBalance: collected - spent,
-    count: transactions.length,
-    contributionCount,
-    expenseCount,
-    avgTransaction: transactions.length > 0 ? (collected + spent) / transactions.length : 0,
-    retentionRate: collected > 0 ? ((collected - spent) / collected * 100) : 0
-  };
-}
-
-function calculateFinancialInsights(periods) {
-  const insights = [];
-  
-  // Month-over-month analysis
-  if (periods.thisMonth.count > 0 && periods.lastMonth.count > 0) {
-    const collectedChange = ((periods.thisMonth.collected - periods.lastMonth.collected) / periods.lastMonth.collected * 100);
-    const spentChange = ((periods.thisMonth.spent - periods.lastMonth.spent) / periods.lastMonth.spent * 100);
-    
-    insights.push(`Contributions ${collectedChange > 0 ? 'increased' : 'decreased'} by ${Math.abs(collectedChange).toFixed(1)}% vs last month`);
-    insights.push(`Expenses ${spentChange > 0 ? 'increased' : 'decreased'} by ${Math.abs(spentChange).toFixed(1)}% vs last month`);
-  }
-  
-  // Retention rate analysis (replacement for savings rate)
-  if (periods.thisMonth.retentionRate > 20) {
-    insights.push('Excellent fund retention this month (>20%)');
-  } else if (periods.thisMonth.retentionRate > 10) {
-    insights.push('Good fund retention this month (10-20%)');
-  } else if (periods.thisMonth.retentionRate > 0) {
-    insights.push('Positive fund retention this month (<10%)');
-  } else {
-    insights.push('Spending exceeded contributions this month');
-  }
-  
-  return insights;
-}
-
-const getMetadataAnalytics = async (organizationId, groupBy) => {
-  const Organization = require('../models/organization.model');
+const getMetadataAnalytics = async (organizationId, groupBy, filter = {}) => {
   const org = await Organization.findById(organizationId).lean();
   if (!org) throw Object.assign(new Error('Organization not found'), { status: 404 });
 
@@ -304,28 +270,34 @@ const getMetadataAnalytics = async (organizationId, groupBy) => {
     throw Object.assign(new Error(`Invalid groupBy parameter: ${groupBy}`), { status: 400 });
   }
 
-  const transactions = await Transaction.find({ organizationId, type: 'contribution' }).lean();
+  const { periodType = 'all', startDate, endDate } = filter;
+  let matchQuery = { organizationId: new mongoose.Types.ObjectId(organizationId), type: 'contribution' };
 
-  const groups = {};
+  if (periodType === 'thisMonth') {
+    const now = new Date();
+    matchQuery.date = { 
+      $gte: new Date(now.getFullYear(), now.getMonth(), 1), 
+      $lt: new Date(now.getFullYear(), now.getMonth() + 1, 1) 
+    };
+  } else if (periodType === 'custom' && startDate && endDate) {
+    matchQuery.date = { $gte: new Date(startDate), $lt: new Date(endDate) };
+  }
 
-  transactions.forEach(t => {
-    let metaVal = 'Unknown';
-    if (t.contributor && t.contributor.metadata) {
-      const meta = typeof t.contributor.metadata.get === 'function' 
-        ? Object.fromEntries(t.contributor.metadata) 
-        : t.contributor.metadata;
-      
-      if (meta[groupBy] !== undefined && meta[groupBy] !== null && meta[groupBy] !== '') {
-        metaVal = meta[groupBy];
+  // Use aggregation to group by metadata (Map values are stored natively in MongoDB as subdocuments)
+  // E.g. contributor.metadata.department
+  const groupByFieldPath = `$contributor.metadata.${groupBy}`;
+
+  const groupsAgg = await Transaction.aggregate([
+    { $match: matchQuery },
+    {
+      $group: {
+        _id: { $ifNull: [groupByFieldPath, 'Unknown'] },
+        count: { $sum: 1 },
+        totalAmount: { $sum: '$amount' }
       }
-    }
-
-    if (!groups[metaVal]) {
-      groups[metaVal] = { count: 0, totalAmount: 0 };
-    }
-    groups[metaVal].count += 1;
-    groups[metaVal].totalAmount += parseFloat(t.amount);
-  });
+    },
+    { $sort: { totalAmount: -1 } }
+  ]);
 
   return {
     field: {
@@ -333,19 +305,73 @@ const getMetadataAnalytics = async (organizationId, groupBy) => {
       label: fieldConfig.label,
       type: fieldConfig.type
     },
-    data: Object.entries(groups).map(([value, stats]) => ({
-      value,
-      count: stats.count,
-      totalAmount: stats.totalAmount
-    })).sort((a, b) => b.totalAmount - a.totalAmount)
+    data: groupsAgg.map(g => ({
+      value: g._id,
+      count: g.count,
+      totalAmount: g.totalAmount
+    }))
+  };
+};
+
+// ==========================================
+// ADMIN-ONLY REPORTS
+// ==========================================
+
+const getBudgetVsActual = async (organizationId, filter = {}) => {
+  const Budget = require('../models/budget.model');
+  const orgId = new mongoose.Types.ObjectId(organizationId);
+  
+  const now = new Date();
+  const year = filter.year || now.getFullYear();
+  const month = filter.month || (now.getMonth() + 1);
+
+  // Get budgets for the given month/year
+  const budgets = await Budget.find({ organizationId: orgId, year, month }).lean();
+  
+  // Get expenses for that month/year
+  const start = new Date(year, month - 1, 1);
+  const end = new Date(year, month, 1);
+  
+  const expensesAgg = await Transaction.aggregate([
+    { $match: { organizationId: orgId, type: 'expense', date: { $gte: start, $lt: end } } },
+    { $group: { _id: '$category', amount: { $sum: '$amount' } } }
+  ]);
+
+  const expenseMap = {};
+  expensesAgg.forEach(e => expenseMap[e._id] = e.amount);
+
+  const breakdown = budgets.map(b => {
+    const actual = expenseMap[b.category] || 0;
+    return {
+      category: b.category,
+      budget: b.limit,
+      actual: actual,
+      variance: b.limit - actual,
+      utilizationPercentage: b.limit > 0 ? (actual / b.limit) * 100 : 0
+    };
+  });
+
+  const totalBudget = breakdown.reduce((sum, b) => sum + b.limit, 0);
+  const totalActual = breakdown.reduce((sum, b) => sum + b.actual, 0);
+
+  return {
+    period: { year, month },
+    summary: {
+      totalBudget,
+      totalActual,
+      totalVariance: totalBudget - totalActual,
+      overallUtilization: totalBudget > 0 ? (totalActual / totalBudget) * 100 : 0
+    },
+    breakdown
   };
 };
 
 module.exports = {
+  getAnalytics,
   getSummary,
   getStats,
   getChartData,
-  getAnalytics,
   calculateFinancialStats,
-  getMetadataAnalytics
+  getMetadataAnalytics,
+  getBudgetVsActual
 };
