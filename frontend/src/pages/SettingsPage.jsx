@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { motion } from 'framer-motion';
-import { Globe, Settings as SettingsIcon, Plus, Trash2, Edit2, Loader2, Save, X, Users } from 'lucide-react';
+import { Globe, Settings as SettingsIcon, Plus, Trash2, Edit2, Loader2, Save, X, Users, Info } from 'lucide-react';
 import api from '../services/api';
 import Button from '../components/common/Button';
 import Card from '../components/common/Card';
@@ -169,10 +169,16 @@ const SettingsPage = () => {
             {publicAccess && (
               <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800">
                 <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">Public Link</h3>
-                <div className="flex items-center space-x-2">
-                   <a href={`/#/public/${organization.slug}`} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline break-all">
-                      {window.location.origin}/#/public/{organization.slug}
-                   </a>
+                <div className="flex flex-col space-y-3">
+                  <div className="flex items-center space-x-2">
+                     <a href={`/#/public/${organization.slug}`} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline break-all">
+                        {window.location.origin}/#/public/{organization.slug}
+                     </a>
+                  </div>
+                  <div className="flex items-start text-xs text-blue-700/90 dark:text-white">
+                    <Info className="w-3.5 h-3.5 mr-1.5 mt-0.5 flex-shrink-0" />
+                    <span><strong>Note:</strong> The public dashboard uses a 60-second cache. Changes to settings or financial records may take up to a minute to appear on the public page.</span>
+                  </div>
                 </div>
               </div>
             )}

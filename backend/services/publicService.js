@@ -93,6 +93,7 @@ const getPublicContributions = async (slug, page = 1, limit = 10) => {
       amount: c.amount,
       date: c.date,
       status: c.status,
+      description: privacyPolicy === 'full' ? c.description : undefined,
       metadata
     };
   });

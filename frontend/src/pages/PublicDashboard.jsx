@@ -411,7 +411,8 @@ const PublicDashboard = () => {
             <PublicTransactionList 
               type={activeTab} 
               slug={slug} 
-              currency={organization.currency} 
+              currency={organization.currency}
+              organization={organization}
             />
           </div>
         </div>

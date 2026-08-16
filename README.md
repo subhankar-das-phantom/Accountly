@@ -1,4 +1,4 @@
-# Personal Finance Tracker 💰
+# Accountly 💰
 
 A full-stack web application for managing personal finances, tracking transactions, setting budgets, and analyzing spending patterns with beautiful visualizations.
 
@@ -16,6 +16,18 @@ A full-stack web application for managing personal finances, tracking transactio
 - **Search & Filter**: Quickly find transactions by date, category, or amount
 - **Bulk Operations**: Import/export transactions in Excel format
 - **Virtual Scrolling**: Efficiently handle large transaction lists
+
+### 🏢 Organization & Multi-Workspace
+- **Multiple Workspaces**: Create or join multiple organizations
+- **Role-based Access**: Owner and Member roles with different permissions
+- **Shared Financials**: Collaborate on tracking expenses and contributions with a team
+- **Custom Contributor Fields**: Define dynamic custom fields (text, select, number) for contributors
+
+### 🌍 Public Transparency Dashboard
+- **Public Link**: Enable a public-facing dashboard for your organization
+- **Contributor Privacy**: Control whether contributor names are fully transparent, anonymized, or fully anonymous
+- **Fund Target Goal**: Set and display a public funding target with dynamic progress tracking
+- **Shared Analytics**: Allow the public to view high-level summaries and category breakdowns without exposing private settings
 
 ### 🎯 Budget Planning
 - **Set Budget Goals**: Create monthly budget targets for different categories
@@ -161,11 +173,44 @@ personal-finance-tracker/
 - `PUT /api/users/me/currency` - Update currency preferences (protected)
 - `DELETE /api/users/me` - Delete account and associated data (protected)
 
+### Organizations & Workspaces
+- `POST /api/organizations` - Create an organization
+- `GET /api/organizations` - Get all organizations for user
+- `GET /api/organizations/:id` - Get specific organization details
+- `PUT /api/organizations/:id` - Update organization details
+- `DELETE /api/organizations/:id` - Delete organization
+- `PATCH /api/organizations/:id/public-settings` - Update public transparency settings
+
+### Organization Members
+- `GET /api/organizations/memberships` - Get all user memberships
+- `GET /api/organizations/:id/members` - Get organization members
+- `POST /api/organizations/:id/members` - Add member to organization
+- `PUT /api/organizations/:id/members/:memberId` - Update member role
+- `DELETE /api/organizations/:id/members/:memberId` - Remove member
+
+### Contributor Fields
+- `GET /api/organizations/:id/contributor-fields` - Get custom fields
+- `POST /api/organizations/:id/contributor-fields` - Add custom field
+- `PUT /api/organizations/:id/contributor-fields/:key` - Update custom field
+- `DELETE /api/organizations/:id/contributor-fields/:key` - Delete custom field
+
 ### Transactions
-- `GET /api/transactions` - Get all transactions (protected)
-- `POST /api/transactions` - Create transaction (protected)
-- `PUT /api/transactions/:id` - Update transaction (protected)
-- `DELETE /api/transactions/:id` - Delete transaction (protected)
+- `GET /api/transactions` - Get all transactions (scoped by organization)
+- `POST /api/transactions` - Create transaction
+- `PUT /api/transactions/:id` - Update transaction
+- `DELETE /api/transactions/:id` - Delete transaction
+
+### Public Dashboard
+- `GET /api/public/organizations/:slug` - Get organization public summary
+- `GET /api/public/organizations/:slug/contributions` - Get public contributions
+- `GET /api/public/organizations/:slug/expenses` - Get public expenses
+- `GET /api/public/organizations/:slug/analytics` - Get public analytics
+
+### Reports & Audit
+- `GET /api/organizations/:id/reports/pdf` - Generate PDF report
+- `GET /api/organizations/:id/reports/excel` - Generate Excel report
+- `GET /api/organizations/:id/audit-logs` - Get audit logs
+- `GET /api/organizations/:id/integrity-check` - Check financial integrity
 
 ### Budget
 - `GET /api/budget` - Get budget goals (protected)

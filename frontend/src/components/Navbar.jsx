@@ -53,8 +53,8 @@ const Navbar = () => {
               <div className="p-1.5 sm:p-2 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-xl shadow-lg group-hover:shadow-xl transition-shadow duration-300">
                 <Wallet className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
               </div>
-              <span className="text-base sm:text-xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
-                FinanceTracker
+              <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
+                Accountly
               </span>
             </Link>
           </motion.div>

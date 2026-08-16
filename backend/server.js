@@ -116,7 +116,7 @@ app.get('/health', (req, res) => {
 // Root metadata
 app.get('/', (req, res) => {
   res.json({
-    message: 'Personal Finance Tracker API',
+    message: 'Accountly API',
     version: '1.0.0',
     endpoints: {
       users: '/api/users',

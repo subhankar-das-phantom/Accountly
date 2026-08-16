@@ -8,7 +8,7 @@ import { User, Tag, Calendar, AlertCircle } from 'lucide-react';
 
 const fetcher = (url) => fetch(url).then(res => res.json());
 
-const PublicTransactionList = ({ type, slug, currency }) => {
+const PublicTransactionList = ({ type, slug, currency, organization }) => {
   const getKey = (pageIndex, previousPageData) => {
     // If we've reached the end, return null
     if (previousPageData && previousPageData.pagination && pageIndex >= previousPageData.pagination.pages) {
@@ -46,7 +46,12 @@ const PublicTransactionList = ({ type, slug, currency }) => {
   const rowVirtualizer = useVirtualizer({
     count: flatData.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 72,
+    estimateSize: (index) => {
+      const item = flatData[index];
+      const showDetails = organization?.settings?.publicContributorNames === 'full' && 
+                         (item?.description || (item?.metadata && Object.keys(item.metadata).length > 0));
+      return showDetails ? 110 : 72;
+    },
     overscan: 5,
   });
 
@@ -76,6 +81,10 @@ const PublicTransactionList = ({ type, slug, currency }) => {
             const item = flatData[virtualRow.index];
             if (!item) return null;
 
+            const isFullDetails = organization?.settings?.publicContributorNames === 'full';
+            const hasExtra = item.description || (item.metadata && Object.keys(item.metadata).length > 0);
+            const showExtra = isFullDetails && hasExtra;
+
             return (
               <div
                 key={virtualRow.index}
@@ -87,36 +96,51 @@ const PublicTransactionList = ({ type, slug, currency }) => {
                   height: `${virtualRow.size}px`,
                   transform: `translateY(${virtualRow.start}px)`,
                 }}
-                className="border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors px-6 flex items-center justify-between"
+                className={`border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors px-6 flex flex-col justify-center ${showExtra ? 'py-3' : ''}`}
               >
-                <div className="flex flex-col justify-center h-full">
-                  <div className="flex items-center text-sm font-medium text-gray-900 dark:text-white mb-1">
-                    {type === 'contributions' ? (
-                      <>
-                        <User className="w-4 h-4 mr-2 text-blue-500" />
-                        {item.contributorName}
-                      </>
-                    ) : (
-                      <>
-                        <Tag className="w-4 h-4 mr-2 text-red-500" />
-                        {item.category}
-                      </>
-                    )}
+                <div className="flex items-center justify-between w-full h-full">
+                  <div className="flex flex-col justify-center">
+                    <div className="flex items-center text-sm font-medium text-gray-900 dark:text-white mb-1">
+                      {type === 'contributions' ? (
+                        <>
+                          <User className="w-4 h-4 mr-2 text-blue-500" />
+                          {item.contributorName}
+                        </>
+                      ) : (
+                        <>
+                          <Tag className="w-4 h-4 mr-2 text-red-500" />
+                          {item.category}
+                        </>
+                      )}
+                    </div>
+                    <div className="flex items-center text-xs text-gray-500 dark:text-gray-400">
+                      <Calendar className="w-3 h-3 mr-1" />
+                      {format(new Date(item.date), 'MMM dd, yyyy')}
+                      {type === 'expense' && item.recipientName && (
+                        <span className="ml-3 px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-full">
+                          To: {item.recipientName}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center text-xs text-gray-500 dark:text-gray-400">
-                    <Calendar className="w-3 h-3 mr-1" />
-                    {format(new Date(item.date), 'MMM dd, yyyy')}
-                    {type === 'expense' && item.recipientName && (
-                      <span className="ml-3 px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-full">
-                        To: {item.recipientName}
+                  <div className={`font-semibold ${type === 'contributions' ? 'text-green-600 dark:text-green-400' : 'text-gray-900 dark:text-white'}`}>
+                    {type === 'contributions' ? '+' : ''}
+                    {formatCurrency(item.amount, currency.locale, currency.code)}
+                  </div>
+                </div>
+                
+                {showExtra && (
+                  <div className="mt-2 text-xs text-gray-600 dark:text-gray-400 flex flex-wrap gap-2">
+                    {item.description && (
+                      <span className="italic text-gray-500 dark:text-gray-500 w-full mb-1">"{item.description}"</span>
+                    )}
+                    {item.metadata && Object.entries(item.metadata).map(([key, val]) => (
+                      <span key={key} className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
+                        <span className="font-medium mr-1">{organization.contributorFields?.find(f => f.key === key)?.label || key}:</span> {val}
                       </span>
-                    )}
+                    ))}
                   </div>
-                </div>
-                <div className={`font-semibold ${type === 'contributions' ? 'text-green-600 dark:text-green-400' : 'text-gray-900 dark:text-white'}`}>
-                  {type === 'contributions' ? '+' : ''}
-                  {formatCurrency(item.amount, currency.locale, currency.code)}
-                </div>
+                )}
               </div>
             );
           })}
