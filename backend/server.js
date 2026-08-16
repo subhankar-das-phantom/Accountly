@@ -87,16 +87,19 @@ process.on('SIGINT', async () => {
 });
 
 // Routers
-const usersRouter = require('./routes/users');
-const transactionsRouter = require('./routes/transactions');
-const budgetRouter = require('./routes/budget');
+const authRouter = require('./routes/auth.routes');
+const transactionRouter = require('./routes/transaction.routes');
+const analyticsRouter = require('./routes/analytics.routes');
+const reportRouter = require('./routes/report.routes');
+const budgetRouter = require('./routes/budget.routes');
 
 
-app.use('/api/users', usersRouter);
-app.use('/api/transactions', transactionsRouter);
+app.use('/api/users', authRouter);
+app.use('/api/transactions', reportRouter);
+app.use('/api/transactions', analyticsRouter);
+app.use('/api/transactions', transactionRouter);
 app.use('/api/budgetGoals', budgetRouter);
 app.use('/api/budget', budgetRouter);
-
 // Health route (keep outside /api so limiter skip works)
 app.get('/health', (req, res) => {
   res.status(200).json({
@@ -141,19 +144,10 @@ app.all('*', (req, res) => {
   });
 });
 
+const errorHandler = require('./middleware/errorHandler');
+
 // Global error handler (keep last)
-// eslint-disable-next-line no-unused-vars
-app.use((err, req, res, next) => {
-  console.error('Global error handler:', err);
-  res.status(err.status || 500).json({
-    success: false,
-    message:
-      process.env.NODE_ENV === 'production'
-        ? 'Something went wrong!'
-        : err.message,
-    error: process.env.NODE_ENV === 'development' ? err.stack : {},
-  });
-});
+app.use(errorHandler);
 
 // Start server
 app.listen(port, () => {
