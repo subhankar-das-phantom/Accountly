@@ -90,16 +90,61 @@ const getTransactions = async (organizationId, queryParams) => {
   return result;
 };
 
+const validateMetadata = async (organizationId, type, contributor) => {
+  if (type !== 'contribution' || !contributor || !contributor.metadata) {
+    return contributor; // Pass through if not a contribution or no metadata
+  }
+
+  const Organization = require('../models/organization.model');
+  const org = await Organization.findById(organizationId).lean();
+  if (!org) throw Object.assign(new Error('Organization not found'), { status: 404 });
+
+  const fields = org.contributorFields || [];
+  const submittedMetadata = contributor.metadata;
+  const validatedMetadata = {};
+
+  for (const field of fields) {
+    const value = submittedMetadata[field.key];
+    
+    // Check required
+    if (field.required && (value === undefined || value === null || value === '')) {
+      throw Object.assign(new Error(`Missing required field: ${field.label}`), { status: 400 });
+    }
+
+    if (value !== undefined && value !== null && value !== '') {
+      // Check select options
+      if (field.type === 'select' && !field.options.includes(value)) {
+        throw Object.assign(new Error(`Invalid option for field ${field.label}`), { status: 400 });
+      }
+
+      // Check number type
+      if (field.type === 'number' && isNaN(Number(value))) {
+        throw Object.assign(new Error(`Field ${field.label} must be a number`), { status: 400 });
+      }
+
+      validatedMetadata[field.key] = value;
+    }
+  }
+
+  // Reject any keys not in validatedMetadata (unknown keys)
+  return {
+    ...contributor,
+    metadata: validatedMetadata
+  };
+};
+
 const createTransaction = async (organizationId, userId, data) => {
   const { type, category, amount, date, description, contributor, recipient, status } = data;
   
+  const validatedContributor = await validateMetadata(organizationId, type, contributor);
+
   const newTransaction = new Transaction({
     type,
     category,
     amount,
     date,
     description,
-    contributor,
+    contributor: validatedContributor,
     recipient,
     status,
     user: userId, // temporarily preserved
@@ -113,6 +158,9 @@ const createTransaction = async (organizationId, userId, data) => {
 
 const updateTransaction = async (organizationId, transactionId, data) => {
   const { type, category, amount, date, description, contributor, recipient, status } = data;
+  
+  const validatedContributor = await validateMetadata(organizationId, type, contributor);
+
   // Ensure the transaction belongs to the organization
   const updatedTransaction = await Transaction.findOneAndUpdate(
     { _id: transactionId, organizationId: organizationId },
@@ -122,7 +170,7 @@ const updateTransaction = async (organizationId, transactionId, data) => {
       amount,
       date,
       description,
-      contributor,
+      contributor: validatedContributor,
       recipient,
       status
     },

@@ -182,14 +182,38 @@ async function generatePDFReport(doc, transactions, stats, userCurrency) {
   doc.fontSize(14).fillColor('#2D3748').text('FINANCIAL RECORD HISTORY', 50, yPosition);
   yPosition += 25;
   
+  // Fetch organization to get contributor fields
+  let orgFields = [];
+  try {
+    const Organization = require('../models/organization.model');
+    const org = await Organization.findById(transactions[0]?.organizationId).lean();
+    if (org && org.contributorFields) {
+      orgFields = org.contributorFields.filter(f => f.publicVisibility === 'visible');
+    }
+  } catch (e) {
+    console.error('Error fetching org fields for report:', e);
+  }
+
   // Transaction table header
   doc.rect(50, yPosition, 495, 25).fill('#EDF2F7').stroke('#CBD5E0');
   doc.fontSize(9).fillColor('#2D3748');
   doc.text('Date', 60, yPosition + 8);
-  doc.text('Type', 130, yPosition + 8);
-  doc.text('Category', 180, yPosition + 8);
-  doc.text('Amount', 280, yPosition + 8);
-  doc.text('Description', 350, yPosition + 8);
+  doc.text('Type', 110, yPosition + 8);
+  doc.text('Category', 160, yPosition + 8);
+  
+  // Dynamically allocate space for metadata fields vs description
+  const hasMetadata = orgFields.length > 0;
+  let metadataStartX = 240;
+  const colWidth = 50;
+
+  if (hasMetadata) {
+    orgFields.slice(0, 3).forEach((field, i) => {
+      doc.text(field.label.substring(0, 10), metadataStartX + (i * colWidth), yPosition + 8);
+    });
+  }
+  
+  doc.text('Amount', 400, yPosition + 8);
+  doc.text('Desc', 460, yPosition + 8);
   yPosition += 25;
   
   let runningBalance = 0;
@@ -207,10 +231,22 @@ async function generatePDFReport(doc, transactions, stats, userCurrency) {
     
     doc.fontSize(8).fillColor('#4A5568');
     doc.text(new Date(t.date).toLocaleDateString(), 60, yPosition + 5);
-    doc.fillColor(t.type === 'contribution' ? '#38A169' : '#E53E3E').text(t.type.toUpperCase(), 130, yPosition + 5);
-    doc.fillColor('#4A5568').text(t.category.substring(0, 12), 180, yPosition + 5);
-    doc.text(formatCurrency(amount), 280, yPosition + 5);
-    doc.text(String(t.description || '').substring(0, 25), 350, yPosition + 5);
+    doc.fillColor(t.type === 'contribution' ? '#38A169' : '#E53E3E').text(t.type.substring(0, 4).toUpperCase(), 110, yPosition + 5);
+    doc.fillColor('#4A5568').text(t.category.substring(0, 12), 160, yPosition + 5);
+    
+    if (hasMetadata && t.contributor?.metadata) {
+      const meta = typeof t.contributor.metadata.get === 'function' 
+        ? Object.fromEntries(t.contributor.metadata) 
+        : t.contributor.metadata;
+        
+      orgFields.slice(0, 3).forEach((field, i) => {
+        const val = meta[field.key] || '';
+        doc.text(String(val).substring(0, 10), metadataStartX + (i * colWidth), yPosition + 5);
+      });
+    }
+
+    doc.text(formatCurrency(amount), 400, yPosition + 5);
+    doc.text(String(t.description || '').substring(0, 10), 460, yPosition + 5);
     yPosition += 18;
   });
   

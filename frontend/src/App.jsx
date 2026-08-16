@@ -8,6 +8,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 
 import ProfilePage from './pages/ProfilePage';
+import SettingsPage from './pages/SettingsPage';
 
 import TransactionsPage from './pages/TransactionsPage';
 import AnalyticsPage from './pages/AnalyticsPage';
@@ -28,6 +29,7 @@ function App() {
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/budget" element={<BudgetPage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/settings" element={<SettingsPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
           </Routes>

@@ -293,10 +293,59 @@ function calculateFinancialInsights(periods) {
   return insights;
 }
 
+const getMetadataAnalytics = async (organizationId, groupBy) => {
+  const Organization = require('../models/organization.model');
+  const org = await Organization.findById(organizationId).lean();
+  if (!org) throw Object.assign(new Error('Organization not found'), { status: 404 });
+
+  // Validate that groupBy is a configured field
+  const fieldConfig = (org.contributorFields || []).find(f => f.key === groupBy);
+  if (!fieldConfig) {
+    throw Object.assign(new Error(`Invalid groupBy parameter: ${groupBy}`), { status: 400 });
+  }
+
+  const transactions = await Transaction.find({ organizationId, type: 'contribution' }).lean();
+
+  const groups = {};
+
+  transactions.forEach(t => {
+    let metaVal = 'Unknown';
+    if (t.contributor && t.contributor.metadata) {
+      const meta = typeof t.contributor.metadata.get === 'function' 
+        ? Object.fromEntries(t.contributor.metadata) 
+        : t.contributor.metadata;
+      
+      if (meta[groupBy] !== undefined && meta[groupBy] !== null && meta[groupBy] !== '') {
+        metaVal = meta[groupBy];
+      }
+    }
+
+    if (!groups[metaVal]) {
+      groups[metaVal] = { count: 0, totalAmount: 0 };
+    }
+    groups[metaVal].count += 1;
+    groups[metaVal].totalAmount += parseFloat(t.amount);
+  });
+
+  return {
+    field: {
+      key: fieldConfig.key,
+      label: fieldConfig.label,
+      type: fieldConfig.type
+    },
+    data: Object.entries(groups).map(([value, stats]) => ({
+      value,
+      count: stats.count,
+      totalAmount: stats.totalAmount
+    })).sort((a, b) => b.totalAmount - a.totalAmount)
+  };
+};
+
 module.exports = {
   getSummary,
   getStats,
   getChartData,
   getAnalytics,
-  calculateFinancialStats
+  calculateFinancialStats,
+  getMetadataAnalytics
 };

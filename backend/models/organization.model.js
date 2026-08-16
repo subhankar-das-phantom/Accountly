@@ -35,7 +35,16 @@ const organizationSchema = new Schema({
       enum: ['full', 'anonymized', 'anonymous'], 
       default: 'anonymized' 
     }
-  }
+  },
+  contributorFields: [{
+    key: { type: String, match: /^[a-zA-Z][a-zA-Z0-9_]*$/ },
+    label: { type: String, maxlength: 50 },
+    type: { type: String, enum: ['text', 'select', 'number'] },
+    required: { type: Boolean, default: false },
+    publicVisibility: { type: String, enum: ['visible', 'hidden'], default: 'visible' },
+    options: [{ type: String, maxlength: 100 }], // for 'select' type
+    order: { type: Number, default: 0 }
+  }]
 }, {
   timestamps: true
 });

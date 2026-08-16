@@ -71,14 +71,29 @@ const getPublicContributions = async (slug, page = 1, limit = 10) => {
   const total = await Transaction.countDocuments({ organizationId: org._id, type: 'contribution' });
 
   const privacyPolicy = (org.settings && org.settings.publicContributorNames) || 'anonymized';
+  const publicFields = (org.contributorFields || []).filter(f => f.publicVisibility === 'visible').map(f => f.key);
 
-  const mapped = contributions.map(c => ({
-    id: c._id,
-    contributorName: formatContributorName(c.contributor?.name, privacyPolicy),
-    amount: c.amount,
-    date: c.date,
-    status: c.status
-  }));
+  const mapped = contributions.map(c => {
+    let metadata = {};
+    if (c.contributor?.metadata) {
+      // Safely handle Map or plain object
+      const meta = typeof c.contributor.metadata.get === 'function' ? Object.fromEntries(c.contributor.metadata) : c.contributor.metadata;
+      for (const key of publicFields) {
+        if (meta[key] !== undefined) {
+          metadata[key] = meta[key];
+        }
+      }
+    }
+
+    return {
+      id: c._id,
+      contributorName: formatContributorName(c.contributor?.name, privacyPolicy),
+      amount: c.amount,
+      date: c.date,
+      status: c.status,
+      metadata
+    };
+  });
 
   return {
     contributions: mapped,

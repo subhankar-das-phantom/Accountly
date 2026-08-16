@@ -31,5 +31,6 @@ const cacheMiddleware = (req, res, next) => {
 router.get('/organizations/:slug', cacheMiddleware, publicController.getOrganizationSummary);
 router.get('/organizations/:slug/contributions', cacheMiddleware, publicController.getPublicContributions);
 router.get('/organizations/:slug/expenses', cacheMiddleware, publicController.getPublicExpenses);
+router.get('/organizations/:slug/analytics', cacheMiddleware, publicController.getPublicAnalytics);
 
 module.exports = router;

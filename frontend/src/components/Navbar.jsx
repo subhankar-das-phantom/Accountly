@@ -13,7 +13,8 @@ import {
   UserPlus,
   LogIn,
   PieChart,
-  PiggyBank
+  PiggyBank,
+  Settings
 } from 'lucide-react';
 import Button from './common/Button';
 
@@ -86,6 +87,12 @@ const Navbar = () => {
                   icon={PiggyBank} 
                   label="Budget" 
                   isActive={isActiveLink('/budget')}
+                />
+                <NavItem 
+                  to="/settings" 
+                  icon={Settings} 
+                  label="Settings" 
+                  isActive={isActiveLink('/settings')}
                 />
                   <div className="flex items-center space-x-4 ml-6 pl-6 border-l border-gray-200 dark:border-gray-700">
                     <Link to="/profile">
@@ -181,6 +188,12 @@ const Navbar = () => {
                     to="/budget" 
                     icon={PiggyBank} 
                     label="Budget" 
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  />
+                  <MobileNavItem 
+                    to="/settings" 
+                    icon={Settings} 
+                    label="Settings" 
                     onClick={() => setIsMobileMenuOpen(false)}
                   />
                   

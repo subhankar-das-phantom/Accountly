@@ -20,7 +20,8 @@ const transactionSchema = new Schema({
     required: true
   },
   contributor: {
-    name: { type: String, trim: true }
+    name: { type: String, trim: true },
+    metadata: { type: Map, of: Schema.Types.Mixed, default: {} }
   },
   recipient: {
     name: { type: String, trim: true }

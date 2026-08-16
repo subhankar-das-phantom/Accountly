@@ -12,9 +12,11 @@ import {
   AlertCircle,
   X,
   User,
-  Store
+  Store,
+  Layers
 } from 'lucide-react';
 import { CONTRIBUTION_CATEGORIES, EXPENSE_CATEGORIES } from '../constants/financeCategories';
+import { useApi } from '../hooks/useApi';
 
 const TransactionForm = ({ onSubmit, transaction, isLoading = false, onClose }) => {
   const [formData, setFormData] = useState({
@@ -25,10 +27,15 @@ const TransactionForm = ({ onSubmit, transaction, isLoading = false, onClose }) 
     date: '',
     description: '',
     contributorName: '',
-    recipientName: ''
+    recipientName: '',
+    metadata: {}
   });
   const [errors, setErrors] = useState({});
   const [isSubmitted, setIsSubmitted] = useState(false);
+
+  const { data: orgData } = useApi('organizations');
+  const org = orgData?.[0];
+  const contributorFields = org?.contributorFields || [];
 
   // Predefined categories from centralized constants
   const categories = {
@@ -50,7 +57,12 @@ const TransactionForm = ({ onSubmit, transaction, isLoading = false, onClose }) 
         date: transaction.date ? transaction.date.substring(0, 10) : '',
         description: transaction.description || '',
         contributorName: transaction.contributor?.name || '',
-        recipientName: transaction.recipient?.name || ''
+        recipientName: transaction.recipient?.name || '',
+        metadata: transaction.contributor?.metadata 
+          ? (typeof transaction.contributor.metadata.get === 'function' 
+              ? Object.fromEntries(transaction.contributor.metadata) 
+              : transaction.contributor.metadata)
+          : {}
       });
     }
   }, [transaction]);
@@ -67,6 +79,18 @@ const TransactionForm = ({ onSubmit, transaction, isLoading = false, onClose }) 
     }
     if (!formData.date) newErrors.date = 'Date is required';
     if (!formData.description.trim()) newErrors.description = 'Description is required';
+    
+    // Validate required metadata fields
+    if (formData.type === 'contribution') {
+      contributorFields.forEach(field => {
+        if (field.required) {
+          const val = formData.metadata[field.key];
+          if (val === undefined || val === null || val === '') {
+            newErrors[`meta_${field.key}`] = `${field.label} is required`;
+          }
+        }
+      });
+    }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -97,8 +121,11 @@ const TransactionForm = ({ onSubmit, transaction, isLoading = false, onClose }) 
         description: formData.description
       };
 
-      if (formData.type === 'contribution' && formData.contributorName) {
-        submitData.contributor = { name: formData.contributorName };
+      if (formData.type === 'contribution') {
+        submitData.contributor = { 
+          name: formData.contributorName,
+          metadata: formData.metadata
+        };
       } else if (formData.type === 'expense' && formData.recipientName) {
         submitData.recipient = { name: formData.recipientName };
       }
@@ -114,7 +141,8 @@ const TransactionForm = ({ onSubmit, transaction, isLoading = false, onClose }) 
           date: '',
           description: '',
           contributorName: '',
-          recipientName: ''
+          recipientName: '',
+          metadata: {}
         });
         setIsSubmitted(false);
       }
@@ -324,6 +352,65 @@ const TransactionForm = ({ onSubmit, transaction, isLoading = false, onClose }) 
             </FormField>
           )}
         </motion.div>
+
+        {/* Dynamic Contributor Fields */}
+        {formData.type === 'contribution' && contributorFields.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.47 }}
+            className="grid grid-cols-1 md:grid-cols-2 gap-4"
+          >
+            {contributorFields.map((field) => (
+              <FormField
+                key={field.key}
+                label={`${field.label} ${!field.required ? '(Optional)' : ''}`}
+                icon={Layers}
+                error={errors[`meta_${field.key}`]}
+                isSubmitted={isSubmitted}
+              >
+                {field.type === 'select' ? (
+                  <motion.select
+                    variants={inputVariants}
+                    whileFocus="focus"
+                    value={formData.metadata[field.key] || ''}
+                    onChange={(e) => setFormData(prev => ({
+                      ...prev,
+                      metadata: { ...prev.metadata, [field.key]: e.target.value }
+                    }))}
+                    className={`w-full pl-10 pr-4 py-3 rounded-xl border transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-white ${
+                      errors[`meta_${field.key}`] && isSubmitted
+                        ? 'border-red-400 focus:border-red-500 focus:ring-red-200'
+                        : 'border-gray-200 dark:border-gray-700 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-800'
+                    } focus:ring-2 focus:outline-none`}
+                  >
+                    <option value="">Select {field.label}</option>
+                    {field.options?.map(opt => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </motion.select>
+                ) : (
+                  <motion.input
+                    variants={inputVariants}
+                    whileFocus="focus"
+                    type={field.type === 'number' ? 'number' : 'text'}
+                    value={formData.metadata[field.key] || ''}
+                    onChange={(e) => setFormData(prev => ({
+                      ...prev,
+                      metadata: { ...prev.metadata, [field.key]: e.target.value }
+                    }))}
+                    placeholder={`Enter ${field.label.toLowerCase()}`}
+                    className={`w-full pl-10 pr-4 py-3 rounded-xl border transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-white ${
+                      errors[`meta_${field.key}`] && isSubmitted
+                        ? 'border-red-400 focus:border-red-500 focus:ring-red-200'
+                        : 'border-gray-200 dark:border-gray-700 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-800'
+                    } focus:ring-2 focus:outline-none`}
+                  />
+                )}
+              </FormField>
+            ))}
+          </motion.div>
+        )}
 
         {/* Amount */}
         <motion.div

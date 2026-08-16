@@ -17,7 +17,32 @@ import api from '../services/api';
 import { useCurrency } from '../context/CurrencyContext';
 import { formatCurrency } from '../utils/currency';
 import Chart from '../components/Chart';
-import StatsCards from '../components/StatsCards';
+
+const StatsCard = ({ title, value, icon: Icon, color, subtitle }) => {
+  const { currency } = useCurrency();
+  const colorClasses = {
+    emerald: "from-emerald-500 to-teal-600 text-emerald-700 bg-emerald-50 dark:bg-emerald-600 dark:text-white",
+    red: "from-red-500 to-rose-600 text-red-700 bg-red-50 dark:bg-red-600 dark:text-white",
+    blue: "from-blue-500 to-cyan-600 text-blue-700 bg-blue-50 dark:bg-blue-600 dark:text-white",
+  };
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 border border-gray-100 dark:border-gray-700 transition-all duration-200">
+      <div className="flex items-center justify-between mb-4">
+        <div className={`p-3 rounded-xl bg-gradient-to-r ${colorClasses[color].split(" ")[0]} ${colorClasses[color].split(" ")[1]}`}>
+          <Icon className="h-6 w-6 text-white" />
+        </div>
+        <div className={`px-2 py-1 rounded-full text-xs font-medium ${colorClasses[color].split(" ")[2]} ${colorClasses[color].split(" ")[3]} ${colorClasses[color].split(" ")[4]} ${colorClasses[color].split(" ")[5] || ''} ${colorClasses[color].split(" ")[6] || ''}`}>
+          {subtitle}
+        </div>
+      </div>
+      <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">{title}</h3>
+      <p className="text-base sm:text-2xl font-bold text-gray-900 dark:text-white truncate">
+        {formatCurrency(value, currency.locale, currency.code)}
+      </p>
+    </div>
+  );
+};
 
 // Simplified read-only row
 const PublicRecordRow = ({ record, type }) => {
@@ -208,7 +233,11 @@ const PublicDashboard = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         
         {/* Summary Stats */}
-        <StatsCards stats={stats} />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {stats.map((stat, idx) => (
+            <StatsCard key={idx} {...stat} />
+          ))}
+        </div>
 
         {/* Charts Section */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
