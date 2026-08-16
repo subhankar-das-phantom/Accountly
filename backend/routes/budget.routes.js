@@ -1,5 +1,6 @@
 const router = require('express').Router();
 const auth = require('../middleware/auth');
+const resolveOrganization = require('../middleware/resolveOrganization');
 const budgetController = require('../controllers/budgetController');
 
 // Get all budget goals for the authenticated user
@@ -15,9 +16,9 @@ router.put('/:id', auth, budgetController.updateBudgetGoal);
 router.delete('/:id', auth, budgetController.deleteBudgetGoal);
 
 // Get available categories (from existing transactions)
-router.get('/categories', auth, budgetController.getCategories);
+router.get('/categories', auth, resolveOrganization, budgetController.getCategories);
 
 // Get budget progress for current month
-router.get('/progress', auth, budgetController.getBudgetProgress);
+router.get('/progress', auth, resolveOrganization, budgetController.getBudgetProgress);
 
 module.exports = router;

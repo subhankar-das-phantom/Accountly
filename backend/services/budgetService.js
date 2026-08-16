@@ -66,18 +66,18 @@ const deleteBudgetGoal = async (userId, goalId) => {
   return { message: 'Budget goal deleted successfully.' };
 };
 
-const getCategories = async (userId) => {
-  const userObjectId = new mongoose.Types.ObjectId(userId);
+const getCategories = async (organizationId) => {
+  const orgObjectId = new mongoose.Types.ObjectId(organizationId);
 
   return await Transaction.aggregate([
-    { $match: { user: userObjectId, type: 'expense' } },
+    { $match: { organizationId: orgObjectId, type: 'expense' } },
     { $group: { _id: '$category', count: { $sum: 1 } } },
     { $sort: { count: -1 } },
     { $project: { category: '$_id', transactionCount: '$count', _id: 0 } },
   ]);
 };
 
-const getBudgetProgress = async (userId) => {
+const getBudgetProgress = async (userId, organizationId) => {
   const now = new Date();
   const currentMonth = now.getMonth();
   const currentYear = now.getFullYear();
@@ -99,12 +99,12 @@ const getBudgetProgress = async (userId) => {
     999
   );
 
-  const userObjectId = new mongoose.Types.ObjectId(userId);
+  const orgObjectId = new mongoose.Types.ObjectId(organizationId);
 
   const actualSpending = await Transaction.aggregate([
     {
       $match: {
-        user: userObjectId,
+        organizationId: orgObjectId,
         type: 'expense',
         date: { $gte: startOfMonth, $lte: endOfMonth },
       },

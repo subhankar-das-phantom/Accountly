@@ -47,7 +47,7 @@ const deleteBudgetGoal = async (req, res, next) => {
 
 const getCategories = async (req, res, next) => {
   try {
-    const result = await budgetService.getCategories(req.user);
+    const result = await budgetService.getCategories(req.organizationId);
     res.json(result);
   } catch (err) {
     next(err);
@@ -56,7 +56,9 @@ const getCategories = async (req, res, next) => {
 
 const getBudgetProgress = async (req, res, next) => {
   try {
-    const result = await budgetService.getBudgetProgress(req.user);
+    // We pass req.user for finding BudgetGoals (still user owned)
+    // and req.organizationId for aggregating Transactions.
+    const result = await budgetService.getBudgetProgress(req.user, req.organizationId);
     res.json(result);
   } catch (err) {
     next(err);
