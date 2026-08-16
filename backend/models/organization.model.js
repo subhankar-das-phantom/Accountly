@@ -29,7 +29,12 @@ const organizationSchema = new Schema({
     index: true
   },
   settings: {
-    publicAccess: { type: Boolean, default: false }
+    publicAccess: { type: Boolean, default: false },
+    publicContributorNames: { 
+      type: String, 
+      enum: ['full', 'anonymized', 'anonymous'], 
+      default: 'anonymized' 
+    }
   }
 }, {
   timestamps: true

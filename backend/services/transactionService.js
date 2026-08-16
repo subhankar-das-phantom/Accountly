@@ -107,7 +107,7 @@ const createTransaction = async (organizationId, userId, data) => {
   });
 
   const savedTransaction = await newTransaction.save();
-  invalidateUserCache(organizationId);
+  await invalidateUserCache(organizationId);
   return savedTransaction;
 };
 
@@ -129,7 +129,7 @@ const updateTransaction = async (organizationId, transactionId, data) => {
     { new: true }
   );
 
-  invalidateUserCache(organizationId);
+  await invalidateUserCache(organizationId);
   return updatedTransaction;
 };
 
@@ -138,7 +138,7 @@ const deleteTransaction = async (organizationId, transactionId) => {
     _id: transactionId, 
     organizationId: organizationId
   });
-  invalidateUserCache(organizationId);
+  await invalidateUserCache(organizationId);
   return deletedTransaction;
 };
 

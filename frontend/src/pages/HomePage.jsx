@@ -29,6 +29,8 @@ import { useTimeFilter } from "../context/TimeFilterContext";
 import { formatCurrency } from "../utils/currency";
 import Button from "../components/common/Button";
 import Card from "../components/common/Card";
+import PublicSettingsModal from "../components/PublicSettingsModal";
+import { Globe } from "lucide-react";
 
 const HomePage = () => {
   const { token, user } = useContext(AuthContext);
@@ -58,6 +60,7 @@ const HomePage = () => {
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [showBudgetForm, setShowBudgetForm] = useState(false);
   const [editingBudgetGoal, setEditingBudgetGoal] = useState(null);
+  const [showPublicSettings, setShowPublicSettings] = useState(false);
 
   // Animation variants
   const containerVariants = {
@@ -544,6 +547,13 @@ const HomePage = () => {
                   setShowBudgetForm(true);
                 }}
               />
+              <QuickActionCard
+                title="Public Transparency"
+                description="Manage public view settings"
+                icon={Globe}
+                color="blue"
+                onClick={() => setShowPublicSettings(true)}
+              />
             </div>
           </Card>
         </motion.div>
@@ -647,6 +657,29 @@ const HomePage = () => {
                     }
                   }}
                 />
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Public Settings Modal */}
+        <AnimatePresence>
+          {showPublicSettings && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex flex-col items-center overflow-y-auto p-4 sm:p-6"
+              onClick={() => setShowPublicSettings(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-md my-auto flex-shrink-0"
+              >
+                <PublicSettingsModal onClose={() => setShowPublicSettings(false)} />
               </motion.div>
             </motion.div>
           )}

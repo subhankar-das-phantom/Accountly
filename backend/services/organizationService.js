@@ -56,7 +56,9 @@ const updateOrganization = async (userId, orgId, data) => {
   if (name) org.name = name;
   if (description !== undefined) org.description = description;
   if (currency) org.currency = currency;
-  if (settings) org.settings = settings;
+  if (settings) {
+    org.settings = { ...org.settings, ...settings };
+  }
 
   return await org.save();
 };

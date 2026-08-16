@@ -12,6 +12,7 @@ import ProfilePage from './pages/ProfilePage';
 import TransactionsPage from './pages/TransactionsPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import BudgetPage from './pages/BudgetPage';
+import PublicDashboard from './pages/PublicDashboard';
 
 import { AnimatePresence } from 'framer-motion';
 
@@ -22,6 +23,7 @@ function App() {
         <AnimatePresence mode="wait">
           <Routes>
             <Route path="/" element={<HomePage />} />
+            <Route path="/public/:slug" element={<PublicDashboard />} />
             <Route path="/transactions" element={<TransactionsPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/budget" element={<BudgetPage />} />

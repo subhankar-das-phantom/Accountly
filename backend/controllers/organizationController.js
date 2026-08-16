@@ -45,10 +45,25 @@ const deleteOrganization = async (req, res, next) => {
   }
 };
 
+const patchPublicSettings = async (req, res, next) => {
+  try {
+    const { publicAccess, publicContributorNames } = req.body;
+    const settingsUpdate = {};
+    if (publicAccess !== undefined) settingsUpdate.publicAccess = publicAccess;
+    if (publicContributorNames !== undefined) settingsUpdate.publicContributorNames = publicContributorNames;
+    
+    const result = await organizationService.updateOrganization(req.user, req.params.id, { settings: settingsUpdate });
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   createOrganization,
   getOrganizations,
   getOrganization,
   updateOrganization,
-  deleteOrganization
+  deleteOrganization,
+  patchPublicSettings
 };

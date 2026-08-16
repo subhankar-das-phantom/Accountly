@@ -9,10 +9,16 @@ const getCacheKey = (prefix, orgId, params = {}) => {
 };
 
 // Helper to invalidate organization cache
-const invalidateUserCache = (orgId) => {
+const invalidateUserCache = async (orgId) => {
   const keys = cache.keys();
+  
+  // Find the slug manually to avoid circular dependencies
+  const mongoose = require('mongoose');
+  const org = await mongoose.model('Organization').findById(orgId);
+  const slugStr = org ? `public_org_${org.slug}` : null;
+  
   keys.forEach(key => {
-    if (key.includes(`org_${orgId.toString()}`)) {
+    if (key.includes(`org_${orgId.toString()}`) || (slugStr && key.includes(slugStr))) {
       cache.del(key);
     }
   });

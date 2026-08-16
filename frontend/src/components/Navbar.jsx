@@ -28,6 +28,11 @@ const Navbar = () => {
 
   const isActiveLink = (path) => location.pathname === path;
 
+  // Do not render navbar on public pages
+  if (location.pathname.startsWith('/public')) {
+    return null;
+  }
+
   return (
     <motion.nav
       initial={{ y: -100, opacity: 0 }}

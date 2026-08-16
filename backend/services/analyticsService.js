@@ -252,11 +252,16 @@ function calculatePeriodStats(transactions) {
     .filter(t => t.type === 'expense')
     .reduce((sum, t) => sum + parseFloat(t.amount), 0);
   
+  const contributionCount = transactions.filter(t => t.type === 'contribution').length;
+  const expenseCount = transactions.filter(t => t.type === 'expense').length;
+
   return {
     collected,
     spent,
     remainingBalance: collected - spent,
     count: transactions.length,
+    contributionCount,
+    expenseCount,
     avgTransaction: transactions.length > 0 ? (collected + spent) / transactions.length : 0,
     retentionRate: collected > 0 ? ((collected - spent) / collected * 100) : 0
   };
