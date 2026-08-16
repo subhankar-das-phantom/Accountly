@@ -4,7 +4,7 @@ import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recha
 import { useCurrency } from '../context/CurrencyContext';
 import { formatCurrency } from '../utils/currency';
 
-const Chart = ({ data, title = "Spent Categories Breakdown" }) => {
+const Chart = ({ data, title = "Spent Categories Breakdown", className = "" }) => {
   const { currency } = useCurrency();
   
   // Modern gradient colors for a beautiful look
@@ -26,7 +26,7 @@ const Chart = ({ data, title = "Spent Categories Breakdown" }) => {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700"
+          className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50"
         >
           <p className="text-gray-800 dark:text-gray-200 font-medium">
             {payload[0].name}
@@ -53,10 +53,10 @@ const Chart = ({ data, title = "Spent Categories Breakdown" }) => {
             className="flex items-center gap-2"
           >
             <div
-              className="w-3 h-3 rounded-full"
+              className="w-3 h-3 rounded-full shrink-0"
               style={{ backgroundColor: entry.color }}
             />
-            <span className="text-sm text-gray-600 dark:text-gray-300 font-medium">
+            <span className="text-sm text-gray-600 dark:text-gray-300 font-medium truncate max-w-[120px]" title={entry.value}>
               {entry.value}
             </span>
           </motion.div>
@@ -70,7 +70,7 @@ const Chart = ({ data, title = "Spent Categories Breakdown" }) => {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6 }}
-      className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl p-6 border border-gray-100 dark:border-gray-800 backdrop-blur-sm"
+      className={`bg-white dark:bg-gray-900 rounded-2xl shadow-xl p-6 border border-gray-100 dark:border-gray-800 backdrop-blur-sm ${className}`}
     >
       {/* Header */}
       <motion.div

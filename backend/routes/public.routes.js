@@ -21,7 +21,9 @@ const cacheMiddleware = (req, res, next) => {
   // Override res.json to cache the response
   const originalJson = res.json.bind(res);
   res.json = (body) => {
-    cache.set(key, body);
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      cache.set(key, body);
+    }
     originalJson(body);
   };
   next();

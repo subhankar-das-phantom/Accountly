@@ -66,6 +66,7 @@ const HomePage = () => {
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [showBudgetForm, setShowBudgetForm] = useState(false);
   const [editingBudgetGoal, setEditingBudgetGoal] = useState(null);
+  const [isPublicSettingsOpen, setIsPublicSettingsOpen] = useState(false);
 
   // Animation variants
   const containerVariants = {
@@ -403,27 +404,29 @@ const HomePage = () => {
 
           {/* Main Content Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <motion.div variants={itemVariants}>
-              <Card className="h-[450px] p-6 flex flex-col">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6">
-                  Cash Flow Overview
-                </h3>
-                {stats.summary.contributionCount === 0 && stats.summary.expenseCount === 0 ? (
+            <motion.div variants={itemVariants} className="h-full">
+              {stats.summary.contributionCount === 0 && stats.summary.expenseCount === 0 ? (
+                <Card className="min-h-[450px] h-full p-6 flex flex-col">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6">
+                    Cash Flow Overview
+                  </h3>
                   <div className="flex-1 flex flex-col items-center justify-center text-gray-500">
                     <PieChart className="w-16 h-16 mb-4 text-gray-300" />
                     <p>No financial data yet.</p>
                   </div>
-                ) : (
-                  <div className="flex-1 min-h-0">
-                    <Chart data={chartData} />
-                  </div>
-                )}
-              </Card>
+                </Card>
+              ) : (
+                <Chart 
+                  data={chartData} 
+                  title="Cash Flow Overview" 
+                  className="min-h-[450px] h-full flex flex-col justify-between" 
+                />
+              )}
             </motion.div>
 
             {activeOrg?.settings?.fundTarget > 0 ? (
-              <motion.div variants={itemVariants}>
-                <Card className="p-6 h-[450px] flex flex-col">
+              <motion.div variants={itemVariants} className="h-full">
+                <Card className="p-6 min-h-[450px] h-full flex flex-col">
                   <div className="flex justify-between items-center mb-6">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white">
                       Fund Target Progress
@@ -731,6 +734,13 @@ const HomePage = () => {
                 />
               </motion.div>
             </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Public Settings Modal */}
+        <AnimatePresence>
+          {isPublicSettingsOpen && (
+            <PublicSettingsModal onClose={() => setIsPublicSettingsOpen(false)} />
           )}
         </AnimatePresence>
       </div>

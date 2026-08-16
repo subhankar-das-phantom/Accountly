@@ -3,7 +3,7 @@ const Transaction = require('../models/transaction.model');
 const analyticsService = require('./analyticsService');
 
 const getOrganizationBySlug = async (slug) => {
-  const org = await Organization.findOne({ slug });
+  const org = await Organization.findOne({ slug }).lean();
   if (!org) {
     const error = new Error('Organization not found');
     error.status = 404;

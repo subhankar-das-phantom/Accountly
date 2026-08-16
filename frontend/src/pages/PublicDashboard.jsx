@@ -12,12 +12,14 @@ import {
   User,
   Store,
   ArrowLeft,
-  Target
+  Target,
+  List
 } from 'lucide-react';
 import api from '../services/api';
 import { useCurrency } from '../context/CurrencyContext';
 import { formatCurrency } from '../utils/currency';
 import Chart from '../components/Chart';
+import PublicTransactionList from '../components/PublicTransactionList';
 
 const StatsCard = ({ title, value, icon: Icon, color, subtitle, explanation }) => {
   const { currency } = useCurrency();
@@ -138,9 +140,7 @@ const PublicDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [dashboardData, setDashboardData] = useState(null);
-  
-  const [contributions, setContributions] = useState([]);
-  const [expenses, setExpenses] = useState([]);
+  const [activeTab, setActiveTab] = useState('contributions');
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -149,14 +149,6 @@ const PublicDashboard = () => {
         // 1. Fetch main summary
         const res = await api.get(`/public/organizations/${slug}`);
         setDashboardData(res.data);
-
-        // 2. Fetch first page of contributions
-        const contribRes = await api.get(`/public/organizations/${slug}/contributions?limit=5`);
-        setContributions(contribRes.data.contributions);
-
-        // 3. Fetch first page of expenses
-        const expRes = await api.get(`/public/organizations/${slug}/expenses?limit=5`);
-        setExpenses(expRes.data.expenses);
         
         setError(null);
       } catch (err) {
@@ -264,7 +256,6 @@ const PublicDashboard = () => {
             </div>
             
             <div className="h-12 w-1 bg-gray-300 dark:bg-gray-700 md:h-1 md:w-24 rounded-full relative">
-              <div className="absolute right-1/2 top-1/2 -translate-y-1/2 translate-x-1/2 md:translate-x-0 md:right-0 md:translate-y-1/2 w-3 h-3 bg-gray-400 rotate-45 transform md:-mt-1.5 md:-mr-1.5 md:border-t-2 md:border-r-2 md:bg-transparent md:border-gray-400 hidden md:block"></div>
             </div>
 
             <div className="flex flex-col items-center relative">
@@ -276,7 +267,6 @@ const PublicDashboard = () => {
             </div>
 
             <div className="h-12 w-1 bg-gray-300 dark:bg-gray-700 md:h-1 md:w-24 rounded-full relative">
-              <div className="absolute right-1/2 top-1/2 -translate-y-1/2 translate-x-1/2 md:translate-x-0 md:right-0 md:translate-y-1/2 w-3 h-3 bg-gray-400 rotate-45 transform md:-mt-1.5 md:-mr-1.5 md:border-t-2 md:border-r-2 md:bg-transparent md:border-gray-400 hidden md:block"></div>
             </div>
 
             <div className="flex flex-col items-center">
@@ -335,38 +325,44 @@ const PublicDashboard = () => {
         </div>
 
         {/* Records Lists */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          
-          {/* Contributions */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
-            <div className="p-4 sm:p-6 border-b border-gray-100 dark:border-gray-700">
-              <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-2">Recent Contributions</h2>
-              <div className="w-16 h-1 bg-green-500 rounded-full" />
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden mt-8">
+          <div className="p-4 sm:p-6 border-b border-gray-100 dark:border-gray-700">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-800 dark:text-white flex items-center">
+                <List className="w-5 h-5 mr-2 text-blue-500" />
+                Financial Records
+              </h2>
             </div>
-            <div className="py-2 h-[400px] overflow-y-auto custom-scrollbar">
-              {contributions.length === 0 ? (
-                <div className="text-center text-gray-500 p-8">No contributions recorded yet.</div>
-              ) : (
-                contributions.map(c => <PublicRecordRow key={c.id} record={c} type="contribution" />)
-              )}
+            <div className="flex space-x-4 border-b border-gray-200 dark:border-gray-700 pb-2">
+              <button
+                className={`pb-2 px-1 text-sm font-medium transition-colors border-b-2 ${
+                  activeTab === 'contributions' 
+                    ? 'border-green-500 text-green-600 dark:text-green-400' 
+                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+                onClick={() => setActiveTab('contributions')}
+              >
+                Contributions
+              </button>
+              <button
+                className={`pb-2 px-1 text-sm font-medium transition-colors border-b-2 ${
+                  activeTab === 'expenses' 
+                    ? 'border-red-500 text-red-600 dark:text-red-400' 
+                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+                onClick={() => setActiveTab('expenses')}
+              >
+                Expenses
+              </button>
             </div>
           </div>
-
-          {/* Expenses */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
-            <div className="p-4 sm:p-6 border-b border-gray-100 dark:border-gray-700">
-              <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-2">Recent Expenses</h2>
-              <div className="w-16 h-1 bg-red-500 rounded-full" />
-            </div>
-            <div className="py-2 h-[400px] overflow-y-auto custom-scrollbar">
-              {expenses.length === 0 ? (
-                <div className="text-center text-gray-500 p-8">No expenses recorded yet.</div>
-              ) : (
-                expenses.map(e => <PublicRecordRow key={e.id} record={e} type="expense" />)
-              )}
-            </div>
+          <div className="p-0">
+            <PublicTransactionList 
+              type={activeTab} 
+              slug={slug} 
+              currency={organization.currency} 
+            />
           </div>
-
         </div>
 
       </div>
