@@ -12,6 +12,8 @@ import {
   User,
   Store,
   ArrowLeft,
+  ArrowRight,
+  ArrowDown,
   Target,
   List
 } from 'lucide-react';
@@ -137,6 +139,7 @@ const PublicRecordRow = ({ record, type }) => {
 
 const PublicDashboard = () => {
   const { slug } = useParams();
+  const { currency } = useCurrency();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [dashboardData, setDashboardData] = useState(null);
@@ -221,21 +224,30 @@ const PublicDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 py-8 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <p className="text-sm font-semibold text-blue-600 uppercase tracking-widest mb-2">Accountly Transparency</p>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-white mb-4">
+      {/* Premium Hero Header */}
+      <div className="relative bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 overflow-hidden">
+        {/* Subtle Background Glow */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-3xl h-full bg-blue-500/5 dark:bg-blue-500/10 blur-3xl rounded-full pointer-events-none"></div>
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20 relative z-10 text-center">
+          <div className="inline-flex items-center space-x-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest mb-6 border border-blue-100 dark:border-blue-800/50">
+            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+            <span>Accountly Transparency</span>
+          </div>
+          
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-gray-900 dark:text-white mb-6 tracking-tight">
             {organization.name}
           </h1>
+          
           {organization.description && (
-            <p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto mb-4">
+            <p className="text-lg sm:text-xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto font-medium leading-relaxed">
               {organization.description}
             </p>
           )}
+
           {organization.status === 'ARCHIVED' && (
-            <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-500">
-              <AlertCircle className="w-4 h-4 mr-1.5" />
+            <div className="mt-8 inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-yellow-50 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-500 border border-yellow-200 dark:border-yellow-800/50 shadow-sm">
+              <AlertCircle className="w-5 h-5 mr-2" />
               Archived Organization
             </div>
           )}
@@ -245,36 +257,75 @@ const PublicDashboard = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         
         {/* Fund Flow Visualization */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 border border-gray-100 dark:border-gray-700 text-center">
-          <h2 className="text-lg font-bold text-gray-800 dark:text-white mb-6">Fund Flow Transparency</h2>
-          <div className="flex flex-col md:flex-row items-center justify-center space-y-4 md:space-y-0 md:space-x-8">
-            <div className="flex flex-col items-center">
-              <div className="w-24 h-24 rounded-full bg-blue-100 dark:bg-blue-900/30 border-4 border-blue-500 flex items-center justify-center text-blue-600 dark:text-blue-400 mb-2">
-                <TrendingUp className="w-10 h-10" />
-              </div>
-              <span className="font-semibold text-gray-700 dark:text-gray-300">Collected</span>
-            </div>
+        <div className="bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] p-6 sm:p-10 border border-gray-100 dark:border-gray-700/50 relative overflow-hidden">
+          {/* Subtle background glow */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-emerald-500/5 dark:bg-emerald-500/10 rounded-full blur-[100px] pointer-events-none"></div>
+
+          <div className="text-center mb-10 relative z-10">
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white mb-2">Fund Flow</h2>
+            <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">Real-time overview of incoming and outgoing funds</p>
+          </div>
+
+          <div className="flex flex-col md:flex-row items-stretch justify-center gap-4 sm:gap-6 lg:gap-8 relative z-10 max-w-5xl mx-auto">
             
-            <div className="h-12 w-1 bg-gray-300 dark:bg-gray-700 md:h-1 md:w-24 rounded-full relative">
-            </div>
-
-            <div className="flex flex-col items-center relative">
-              <div className="w-32 h-32 rounded-full bg-emerald-100 dark:bg-emerald-900/30 border-4 border-emerald-500 flex items-center justify-center text-emerald-600 dark:text-emerald-400 mb-2 shadow-lg">
-                <Building2 className="w-12 h-12" />
+            {/* Collected Node */}
+            <div className="flex-1 bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center justify-center relative overflow-hidden group hover:border-blue-500/30 transition-all duration-300">
+              <div className="absolute top-0 left-0 w-full h-1 bg-blue-500"></div>
+              <div className="w-16 h-16 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 mb-4 group-hover:scale-110 group-hover:bg-blue-100 dark:group-hover:bg-blue-900/40 transition-all duration-300">
+                <TrendingUp className="w-8 h-8" />
               </div>
-              <span className="font-bold text-lg text-gray-900 dark:text-white">Organization Fund</span>
-              <span className="text-sm font-medium text-emerald-600">Balance: {summary.remainingBalance.toLocaleString()}</span>
+              <span className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-wider">Total Collected</span>
+              <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                {formatCurrency(summary.totalCollected, currency.locale, currency.code)}
+              </span>
             </div>
 
-            <div className="h-12 w-1 bg-gray-300 dark:bg-gray-700 md:h-1 md:w-24 rounded-full relative">
-            </div>
-
-            <div className="flex flex-col items-center">
-              <div className="w-24 h-24 rounded-full bg-red-100 dark:bg-red-900/30 border-4 border-red-500 flex items-center justify-center text-red-600 dark:text-red-400 mb-2">
-                <TrendingDown className="w-10 h-10" />
+            {/* Connection Arrow (Mobile: Down, Desktop: Right) */}
+            <div className="flex items-center justify-center py-2 md:py-0">
+              <div className="w-10 h-10 rounded-full bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 shadow-sm flex items-center justify-center text-gray-400 dark:text-gray-500 md:rotate-0">
+                <ArrowDown className="w-5 h-5 md:hidden" />
+                <ArrowRight className="w-5 h-5 hidden md:block" />
               </div>
-              <span className="font-semibold text-gray-700 dark:text-gray-300">Spent</span>
             </div>
+
+            {/* Central Organization Fund Node */}
+            <div className="flex-1 bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg shadow-emerald-500/10 flex flex-col items-center justify-center relative overflow-hidden group border border-emerald-200 dark:border-emerald-500/30 transform md:-translate-y-2 transition-all duration-300">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-teal-500"></div>
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-32 bg-emerald-400/10 dark:bg-emerald-500/10 blur-3xl rounded-full pointer-events-none"></div>
+
+              <div className="w-16 h-16 rounded-full bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400 mb-4 group-hover:scale-110 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/40 transition-all duration-300 relative z-10">
+                <Building2 className="w-8 h-8" />
+              </div>
+              <span className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-widest relative z-10">Current Balance</span>
+              <span className="text-3xl sm:text-4xl font-black text-gray-900 dark:text-white mb-4 tracking-tight relative z-10">
+                {formatCurrency(summary.remainingBalance, currency.locale, currency.code)}
+              </span>
+              <div className="inline-flex items-center px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-xs font-bold text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/50 shadow-sm relative z-10">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse mr-2"></span>
+                Available Funds
+              </div>
+            </div>
+
+            {/* Connection Arrow (Mobile: Down, Desktop: Right) */}
+            <div className="flex items-center justify-center py-2 md:py-0">
+              <div className="w-10 h-10 rounded-full bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 shadow-sm flex items-center justify-center text-gray-400 dark:text-gray-500">
+                <ArrowDown className="w-5 h-5 md:hidden" />
+                <ArrowRight className="w-5 h-5 hidden md:block" />
+              </div>
+            </div>
+
+            {/* Spent Node */}
+            <div className="flex-1 bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center justify-center relative overflow-hidden group hover:border-red-500/30 transition-all duration-300">
+              <div className="absolute top-0 left-0 w-full h-1 bg-red-500"></div>
+              <div className="w-16 h-16 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center text-red-600 mb-4 group-hover:scale-110 group-hover:bg-red-100 dark:group-hover:bg-red-900/40 transition-all duration-300">
+                <TrendingDown className="w-8 h-8" />
+              </div>
+              <span className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-wider">Total Spent</span>
+              <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                {formatCurrency(summary.totalSpent, currency.locale, currency.code)}
+              </span>
+            </div>
+
           </div>
         </div>
 
@@ -299,7 +350,7 @@ const PublicDashboard = () => {
                   className="bg-gradient-to-r from-blue-500 to-cyan-500 h-6 rounded-full transition-all duration-1000 ease-out" 
                   style={{ width: `${Math.min((summary.totalCollected / organization.settings.fundTarget) * 100, 100)}%` }}
                 ></div>
-                <div className="absolute inset-0 flex items-center justify-center text-xs font-bold text-gray-800 mix-blend-overlay">
+                <div className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white drop-shadow-md">
                   {((summary.totalCollected / organization.settings.fundTarget) * 100).toFixed(1)}%
                 </div>
               </div>

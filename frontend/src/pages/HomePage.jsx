@@ -226,6 +226,36 @@ const HomePage = () => {
     }
   };
 
+  const handleDownloadPdf = async () => {
+    try {
+      setIsGeneratingReport(true);
+      const response = await api.get("reports/report", {
+        responseType: "blob",
+      });
+
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: "application/pdf" }));
+      const link = document.createElement("a");
+      link.href = url;
+      const today = new Date().toISOString().split("T")[0];
+      link.setAttribute("download", `Financial_Report_${today}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      showNotification("PDF report downloaded successfully!", "success");
+    } catch (error) {
+      console.error("Error downloading PDF report:", error);
+      if (error.response?.status === 404) {
+        showNotification("No records found for report generation", "error");
+      } else {
+        showNotification("Failed to generate PDF report. Please try again.", "error");
+      }
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  };
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -449,7 +479,7 @@ const HomePage = () => {
                           style={{ width: `${Math.min((filteredStats.collected / activeOrg.settings.fundTarget) * 100, 100)}%` }}
                         ></div>
                       </div>
-                      <p className="mt-4 text-center text-sm font-medium text-gray-600">
+                      <p className="mt-4 text-center text-sm font-medium text-gray-600 dark:text-gray-300">
                         {((filteredStats.collected / activeOrg.settings.fundTarget) * 100).toFixed(1)}% Achieved
                       </p>
                     </div>
@@ -463,14 +493,14 @@ const HomePage = () => {
                   description="Download detailed financial summary"
                   icon={Download}
                   color="blue"
-                  onClick={() => setIsGeneratingReport(true)}
+                  onClick={handleDownloadPdf}
                 />
                 <QuickActionCard
                   title="Public Transparency"
                   description="Manage public page access"
                   icon={Globe}
                   color="green"
-                  onClick={() => setIsPublicSettingsOpen(true)}
+                  onClick={() => navigate('/settings')}
                 />
               </motion.div>
             )}
@@ -557,66 +587,14 @@ const HomePage = () => {
               Quick Actions
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <ExcelExportButton organizationId={user?.organizations?.[0]} className="w-full justify-start p-3 sm:p-4 h-auto text-left flex-col items-start border-gray-200 dark:border-gray-700" />
+              <ExcelExportButton organizationId={activeOrg?._id} />
               
               <QuickActionCard
                 title="Download PDF Report"
                 description="Comprehensive financial analysis"
                 icon={Download}
                 color="blue"
-                onClick={async () => {
-                  try {
-                    // Show loading state
-                    setIsGeneratingReport?.(true);
-
-                    const response = await api.get(
-                      "transactions/report",
-                      {
-                        responseType: "blob",
-                      }
-                    );
-
-                    // Create download link
-                    const url = window.URL.createObjectURL(
-                      new Blob([response.data], { type: "application/pdf" })
-                    );
-                    const link = document.createElement("a");
-                    link.href = url;
-
-                    // Dynamic filename with date
-                    const today = new Date().toISOString().split("T")[0];
-                    link.setAttribute(
-                      "download",
-                      `Financial_Report_${today}.pdf`
-                    );
-
-                    // Trigger download
-                    document.body.appendChild(link);
-                    link.click();
-
-                    // Cleanup
-                    link.parentNode.removeChild(link);
-                    window.URL.revokeObjectURL(url);
-
-                    // Success notification
-                    if (typeof showNotification === "function") {
-                      showNotification(
-                        "PDF report downloaded successfully!",
-                        "success"
-                      );
-                    }
-                  } catch (error) {
-                    console.error("Error downloading PDF report:", error);
-
-                    if (error.response?.status === 404) {
-                      alert("No records found for report generation");
-                    } else {
-                      alert("Failed to generate PDF report. Please try again.");
-                    }
-                  } finally {
-                    setIsGeneratingReport?.(false);
-                  }
-                }}
+                onClick={handleDownloadPdf}
               />
 
               <QuickActionCard

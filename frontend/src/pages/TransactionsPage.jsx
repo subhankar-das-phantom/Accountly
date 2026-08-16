@@ -557,7 +557,7 @@ const TransactionsPage = () => {
       if (filters.type) params.append('type', filters.type);
       if (filters.category) params.append('category', filters.category);
 
-      const response = await api.get(`transactions/report?${params.toString()}`, {
+      const response = await api.get(`reports/report?${params.toString()}`, {
         responseType: 'blob',
       });
 
@@ -924,6 +924,7 @@ const TransactionsPage = () => {
           {/* Transaction List */}
           <motion.div variants={itemVariants}>
             <TransactionList
+              title="All Records"
               transactions={transactions}
               onEdit={handleEdit}
               onDelete={handleDelete}

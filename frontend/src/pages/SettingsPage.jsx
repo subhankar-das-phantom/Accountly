@@ -17,6 +17,8 @@ const SettingsPage = () => {
   // Settings State
   const [publicAccess, setPublicAccess] = useState(false);
   const [privacyPolicy, setPrivacyPolicy] = useState('anonymized');
+  const [fundTarget, setFundTarget] = useState('');
+  const [publicTarget, setPublicTarget] = useState(false);
   const [savingPublic, setSavingPublic] = useState(false);
 
   const fetchOrg = async () => {
@@ -28,6 +30,8 @@ const SettingsPage = () => {
         setOrganization(org);
         setPublicAccess(org.settings?.publicAccess || false);
         setPrivacyPolicy(org.settings?.publicContributorNames || 'anonymized');
+        setFundTarget(org.settings?.fundTarget || '');
+        setPublicTarget(org.settings?.publicTarget || false);
       }
     } catch (err) {
       console.error('Failed to fetch organization', err);
@@ -50,7 +54,9 @@ const SettingsPage = () => {
       setSavingPublic(true);
       await api.patch(`organizations/${organization._id}/public-settings`, {
         publicAccess,
-        publicContributorNames: privacyPolicy
+        publicContributorNames: privacyPolicy,
+        fundTarget: fundTarget ? Number(fundTarget) : 0,
+        publicTarget
       });
       alert('Public settings updated successfully.');
     } catch (err) {
@@ -122,6 +128,42 @@ const SettingsPage = () => {
                 <option value="full">Full Names (e.g. Rahul Dravid)</option>
                 <option value="anonymous">Fully Anonymous (e.g. Anonymous)</option>
               </select>
+            </div>
+
+            <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Fund Target Goal</h3>
+              <p className="text-xs text-gray-500 mb-2">Set a monetary goal to display a progress bar on your dashboards.</p>
+              
+              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                <div className="flex-1 w-full">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Target Amount ({organization.currency?.code || 'INR'})</label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="e.g. 50000"
+                    value={fundTarget}
+                    onChange={(e) => setFundTarget(e.target.value)}
+                    className="w-full sm:max-w-xs px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                
+                <div className="flex items-center space-x-3 bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-gray-900 dark:text-white">Show on Public Dashboard</span>
+                    <span className="text-xs text-gray-500">Display progress to public visitors</span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer ml-auto">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer" 
+                      checked={publicTarget}
+                      onChange={(e) => setPublicTarget(e.target.checked)}
+                      disabled={!fundTarget || Number(fundTarget) <= 0}
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600 peer-disabled:opacity-50"></div>
+                  </label>
+                </div>
+              </div>
             </div>
 
             {publicAccess && (

@@ -92,24 +92,54 @@ const AnalyticsPage = () => {
     visible: { y: 0, opacity: 1 },
   };
 
-  const periods = analyticsData?.periods;
-  const monthlyTrendsRaw = analyticsData?.monthlyTrends || [];
-
+  // Map Canonical Schema to Legacy UI
+  const summary = analyticsData?.summary || { totalCollected: 0, totalSpent: 0, remainingBalance: 0, contributionCount: 0, expenseCount: 0 };
+  
   const monthlyTrends = useMemo(() => {
-    if (!monthlyTrendsRaw?.length) return [];
-    const count = timeframe === '3m' ? 3 : timeframe === '12m' ? 12 : 6;
-    const data = monthlyTrendsRaw.slice(-count);
-    return data.map((d) => ({
+    const contTrends = analyticsData?.contributions?.trends || [];
+    const expTrends = analyticsData?.expenses?.trends || [];
+    
+    const merged = {};
+    const getMonthName = (m) => ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m - 1];
+
+    contTrends.forEach(t => {
+      if (!t._id) return;
+      const key = `${t._id.year}-${t._id.month}`;
+      merged[key] = {
+        month: getMonthName(t._id.month),
+        collected: t.totalAmount || 0,
+        spent: 0,
+        sortKey: t._id.year * 100 + t._id.month
+      };
+    });
+
+    expTrends.forEach(t => {
+      if (!t._id) return;
+      const key = `${t._id.year}-${t._id.month}`;
+      if (!merged[key]) {
+        merged[key] = {
+          month: getMonthName(t._id.month),
+          collected: 0,
+          spent: t.totalAmount || 0,
+          sortKey: t._id.year * 100 + t._id.month
+        };
+      } else {
+        merged[key].spent = t.totalAmount || 0;
+      }
+    });
+
+    const data = Object.values(merged).sort((a, b) => a.sortKey - b.sortKey).map(d => ({
       ...d,
-      collected: Number(d.collected || 0),
-      spent: Number(d.spent || 0),
-      netBalance: Number(d.netBalance || 0),
+      netBalance: d.collected - d.spent
     }));
-  }, [monthlyTrendsRaw, timeframe]);
+
+    const count = timeframe === '3m' ? 3 : timeframe === '12m' ? 12 : 6;
+    return data.slice(-count);
+  }, [analyticsData, timeframe]);
 
   const topExpenseCategories = useMemo(() => {
-    return (analyticsData?.topExpenseCategories || []).map((c) => ({
-      category: c.category,
+    return (analyticsData?.expenses?.byCategory || []).map((c) => ({
+      category: c.category || 'Other',
       amount: Number(c.amount || 0),
       count: c.count || 0,
     }));
@@ -238,10 +268,10 @@ const AnalyticsPage = () => {
 
           {/* KPI Cards */}
           <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <AnalyticsCard icon={TrendingUp} title="This Month Collected" value={periods.thisMonth.collected} tone="success" />
-            <AnalyticsCard icon={TrendingDown} title="This Month Spent" value={periods.thisMonth.spent} tone="danger" />
-            <AnalyticsCard icon={Scale} title="This Month Net" value={periods.thisMonth.netBalance} tone={periods.thisMonth.netBalance >= 0 ? 'brand' : 'danger'} />
-            <AnalyticsCard icon={Calendar} title="This Year Net" value={periods.thisYear.netBalance} tone={periods.thisYear.netBalance >= 0 ? 'brand' : 'danger'} />
+            <AnalyticsCard icon={TrendingUp} title="Total Collected" value={summary.totalCollected} tone="success" />
+            <AnalyticsCard icon={TrendingDown} title="Total Spent" value={summary.totalSpent} tone="danger" />
+            <AnalyticsCard icon={Scale} title="Net Balance" value={summary.remainingBalance} tone={summary.remainingBalance >= 0 ? 'brand' : 'danger'} />
+            <AnalyticsCard icon={Calendar} title="Total Transactions" value={summary.contributionCount + summary.expenseCount} tone="brand" />
           </motion.div>
 
           {/* Budget Section
@@ -415,10 +445,8 @@ const AnalyticsPage = () => {
             <Card className="p-6">
               <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-4">Period Comparison</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <PeriodStat title="All Time" period={periods.allTime} />
-                <PeriodStat title="This Year" period={periods.thisYear} />
-                <PeriodStat title="This Month" period={periods.thisMonth} />
-                <PeriodStat title="Last Month" period={periods.lastMonth} />
+                <PeriodStat title="Selected Period" period={{ collected: summary.totalCollected, spent: summary.totalSpent, netBalance: summary.remainingBalance }} />
+                <PeriodStat title="Previous Period" period={{ collected: analyticsData?.comparison?.prevCollected, spent: analyticsData?.comparison?.prevSpent, netBalance: (analyticsData?.comparison?.prevCollected || 0) - (analyticsData?.comparison?.prevSpent || 0) }} />
               </div>
             </Card>
           </div>

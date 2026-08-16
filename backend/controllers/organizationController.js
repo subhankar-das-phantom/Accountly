@@ -47,10 +47,12 @@ const deleteOrganization = async (req, res, next) => {
 
 const patchPublicSettings = async (req, res, next) => {
   try {
-    const { publicAccess, publicContributorNames } = req.body;
+    const { publicAccess, publicContributorNames, fundTarget, publicTarget } = req.body;
     const settingsUpdate = {};
     if (publicAccess !== undefined) settingsUpdate.publicAccess = publicAccess;
     if (publicContributorNames !== undefined) settingsUpdate.publicContributorNames = publicContributorNames;
+    if (fundTarget !== undefined) settingsUpdate.fundTarget = fundTarget;
+    if (publicTarget !== undefined) settingsUpdate.publicTarget = publicTarget;
     
     const result = await organizationService.updateOrganization(req.user, req.params.id, { settings: settingsUpdate });
     res.json(result);
