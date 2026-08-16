@@ -22,6 +22,15 @@ const registerUser = async ({ username, email, password }) => {
   });
 
   const savedUser = await newUser.save();
+
+  // Create default organization for the new user
+  const organizationService = require('./organizationService');
+  await organizationService.createOrganization(savedUser._id, {
+    name: `${savedUser.username}'s Accountly`,
+    description: 'Default Organization',
+    currency: { code: 'INR', locale: 'en-IN' }
+  });
+
   const token = jwt.sign({ id: savedUser._id }, process.env.JWT_SECRET);
 
   return {
