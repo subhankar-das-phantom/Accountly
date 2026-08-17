@@ -32,6 +32,7 @@ const TransactionForm = ({ onSubmit, transaction, isLoading = false, onClose }) 
   });
   const [errors, setErrors] = useState({});
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [initialData, setInitialData] = useState(null);
 
   const { data: orgData } = useApi('organizations');
   const org = orgData?.[0];
@@ -49,7 +50,7 @@ const TransactionForm = ({ onSubmit, transaction, isLoading = false, onClose }) 
       const category = transaction.category || '';
       const isCustom = category && !categories[type]?.includes(category) && category !== 'Other';
       
-      setFormData({
+      const newFormData = {
         type: type,
         category: isCustom ? 'Other' : category,
         customCategory: isCustom ? category : '',
@@ -63,7 +64,12 @@ const TransactionForm = ({ onSubmit, transaction, isLoading = false, onClose }) 
               ? Object.fromEntries(transaction.contributor.metadata) 
               : transaction.contributor.metadata)
           : {}
-      });
+      };
+      
+      setFormData(newFormData);
+      setInitialData(newFormData);
+    } else {
+      setInitialData(null);
     }
   }, [transaction]);
 
@@ -161,6 +167,9 @@ const TransactionForm = ({ onSubmit, transaction, isLoading = false, onClose }) 
     hover: { scale: 1.05, transition: { duration: 0.2 } },
     tap: { scale: 0.95, transition: { duration: 0.1 } }
   };
+
+  const hasChanges = !transaction || JSON.stringify(formData) !== JSON.stringify(initialData);
+  const isDisabled = isLoading || !hasChanges;
 
   return (
     <motion.div
@@ -506,13 +515,13 @@ const TransactionForm = ({ onSubmit, transaction, isLoading = false, onClose }) 
         >
           <motion.button
             type="submit"
-            disabled={isLoading}
+            disabled={isDisabled}
             variants={buttonVariants}
             initial="idle"
-            whileHover={!isLoading ? "hover" : "idle"}
-            whileTap={!isLoading ? "tap" : "idle"}
+            whileHover={!isDisabled ? "hover" : "idle"}
+            whileTap={!isDisabled ? "tap" : "idle"}
             className={`w-full py-4 px-6 rounded-xl font-semibold text-white transition-all duration-200 bg-gradient-to-r from-blue-600 to-cyan-500 ${
-              isLoading
+              isDisabled
                 ? 'opacity-70 cursor-not-allowed'
                 : 'hover:from-blue-700 hover:to-cyan-600 shadow-lg hover:shadow-xl'
             }`}

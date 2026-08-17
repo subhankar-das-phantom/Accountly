@@ -322,28 +322,28 @@ const ContributorFieldBuilder = ({ organization, onRefresh }) => {
 
       <div className="space-y-3">
         {organization.contributorFields?.map(field => (
-          <div key={field.key} className="flex justify-between items-center p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
-            <div>
-              <div className="flex items-center space-x-2 mb-1">
-                <h3 className="font-semibold text-gray-900 dark:text-white">{field.label}</h3>
-                <span className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full font-mono">{field.key}</span>
-                {field.required && <span className="text-xs px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full">Required</span>}
+          <div key={field.key} className="flex justify-between items-start sm:items-center p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2 mb-1">
+                <h3 className="font-semibold text-gray-900 dark:text-white truncate">{field.label}</h3>
+                <span className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full font-mono shrink-0">{field.key}</span>
+                {field.required && <span className="text-xs px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full shrink-0">Required</span>}
               </div>
-              <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center space-x-2">
+              <div className="text-sm text-gray-500 dark:text-gray-400 flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span className="capitalize">{field.type}</span>
                 <span>•</span>
-                <span className={field.publicVisibility === 'hidden' ? 'text-orange-500' : 'text-green-500'}>
+                <span className={field.publicVisibility === 'hidden' ? 'text-orange-500 shrink-0' : 'text-green-500 shrink-0'}>
                   {field.publicVisibility === 'hidden' ? 'Private' : 'Public'}
                 </span>
                 {field.type === 'select' && (
                   <>
                     <span>•</span>
-                    <span className="truncate max-w-[200px]">{field.options.join(', ')}</span>
+                    <span className="truncate max-w-[200px] sm:max-w-xs">{field.options.join(', ')}</span>
                   </>
                 )}
               </div>
             </div>
-            <button onClick={() => handleDelete(field.key)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition">
+            <button onClick={() => handleDelete(field.key)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition flex-shrink-0">
               <Trash2 className="h-5 w-5" />
             </button>
           </div>
