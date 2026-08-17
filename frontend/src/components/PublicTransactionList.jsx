@@ -64,6 +64,24 @@ const PublicTransactionList = ({ type, slug, currency, organization }) => {
     );
   }
 
+  if (isLoadingInitialData) {
+    return (
+      <div className="w-full">
+        <div className="border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 overflow-hidden">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="border-b border-gray-100 dark:border-gray-700/50 px-6 py-4 flex items-center justify-between animate-pulse">
+              <div className="flex flex-col space-y-3">
+                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-32"></div>
+                <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-24"></div>
+              </div>
+              <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-20"></div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full">
       <div 

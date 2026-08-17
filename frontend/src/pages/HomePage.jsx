@@ -64,6 +64,7 @@ const HomePage = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editTransaction, setEditTransaction] = useState(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showBudgetForm, setShowBudgetForm] = useState(false);
   const [editingBudgetGoal, setEditingBudgetGoal] = useState(null);
   const [isPublicSettingsOpen, setIsPublicSettingsOpen] = useState(false);
@@ -182,13 +183,13 @@ const HomePage = () => {
 
   // Refresh data
   const refreshData = async () => {
-    mutateTransactions();
-    globalMutate(`transactions/analytics?periodType=${timeFilter}`);
-    globalMutate(`transactions/budget-vs-actual?month=${now.getMonth() + 1}&year=${now.getFullYear()}`);
+    if (mutateTransactions) mutateTransactions();
+    globalMutate(key => typeof key === 'string' && (key.startsWith('transactions') || key.startsWith('analytics')));
   };
 
   // Handle form submission
   const handleAddTransaction = async (transactionData) => {
+    setIsSubmitting(true);
     try {
       if (editTransaction) {
         await api.put(
@@ -207,6 +208,8 @@ const HomePage = () => {
       await refreshData();
     } catch (error) {
       console.error("Error saving record:", error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -634,7 +637,7 @@ const HomePage = () => {
                 <TransactionForm
                   onSubmit={handleAddTransaction}
                   transaction={editTransaction}
-                  isLoading={false}
+                  isLoading={isSubmitting}
                   onClose={() => {
                     setShowAddForm(false);
                     setEditTransaction(null);

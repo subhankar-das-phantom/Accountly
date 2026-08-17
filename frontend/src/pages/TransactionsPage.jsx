@@ -57,6 +57,7 @@ const TransactionsPage = () => {
     maxAmount: "",
   });
   const [showFilters, setShowFilters] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { token } = useContext(AuthContext);
   const { timeFilter, setTimeFilter, getDateRange } = useTimeFilter();
@@ -145,6 +146,7 @@ const TransactionsPage = () => {
   };
 
   const handleSubmit = async (transactionData) => {
+    setIsSubmitting(true);
     try {
       if (editingTransaction) {
         await api.put(
@@ -157,11 +159,11 @@ const TransactionsPage = () => {
       }
 
       setShowAddForm(false);
-      mutateTransactions(); // Refresh local list
-      globalMutate('transactions/stats'); // Refresh dashboard stats
-      globalMutate('transactions/chart-data'); // Refresh dashboard charts
+      globalMutate(key => typeof key === 'string' && (key.startsWith('transactions') || key.startsWith('analytics')));
     } catch (error) {
       console.error("Error saving record:", error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -172,9 +174,7 @@ const TransactionsPage = () => {
 
     try {
       await api.delete(`transactions/${id}`);
-      mutateTransactions();
-      globalMutate('transactions/stats');
-      globalMutate('transactions/chart-data');
+      globalMutate(key => typeof key === 'string' && (key.startsWith('transactions') || key.startsWith('analytics')));
     } catch (error) {
       console.error("Error deleting record:", error);
     }
@@ -1263,7 +1263,7 @@ const TransactionsPage = () => {
                 <TransactionForm
                   onSubmit={handleSubmit}
                   transaction={editingTransaction}
-                  isLoading={false}
+                  isLoading={isSubmitting}
                   onClose={() => {
                     setShowAddForm(false);
                     setEditingTransaction(null);

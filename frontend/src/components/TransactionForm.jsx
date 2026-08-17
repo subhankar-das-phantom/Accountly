@@ -511,10 +511,10 @@ const TransactionForm = ({ onSubmit, transaction, isLoading = false, onClose }) 
             initial="idle"
             whileHover={!isLoading ? "hover" : "idle"}
             whileTap={!isLoading ? "tap" : "idle"}
-            className={`w-full py-4 px-6 rounded-xl font-semibold text-white transition-all duration-200 ${
+            className={`w-full py-4 px-6 rounded-xl font-semibold text-white transition-all duration-200 bg-gradient-to-r from-blue-600 to-cyan-500 ${
               isLoading
-                ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 shadow-lg hover:shadow-xl'
+                ? 'opacity-70 cursor-not-allowed'
+                : 'hover:from-blue-700 hover:to-cyan-600 shadow-lg hover:shadow-xl'
             }`}
           >
             <div className="flex items-center justify-center space-x-2">
