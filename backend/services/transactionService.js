@@ -56,6 +56,7 @@ const getTransactions = async (organizationId, queryParams) => {
   const sortField = validSortFields.includes(sortBy) ? sortBy : 'date';
   const sortObj = { [sortField]: sortOrder === 'asc' ? 1 : -1 };
   if (sortField !== 'date') sortObj.date = -1;
+  sortObj.createdAt = -1;
 
   // If page/pageSize are provided, paginate; otherwise return all
   let query = Transaction.find(filter).sort(sortObj);
