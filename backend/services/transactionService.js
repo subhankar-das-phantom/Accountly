@@ -1,6 +1,7 @@
 const Transaction = require('../models/transaction.model');
 const { cache, getCacheKey, invalidateUserCache } = require('../utils/cache');
 const auditLogService = require('./auditLogService');
+const escapeRegex = require('../utils/escapeRegex');
 
 const getTransactions = async (organizationId, queryParams) => {
   const {
@@ -46,9 +47,10 @@ const getTransactions = async (organizationId, queryParams) => {
   }
 
   if (search) {
+    const safeSearch = escapeRegex(search);
     filter.$or = [
-      { description: { $regex: search, $options: 'i' } },
-      { category: { $regex: search, $options: 'i' } }
+      { description: { $regex: safeSearch, $options: 'i' } },
+      { category: { $regex: safeSearch, $options: 'i' } }
     ];
   }
 
