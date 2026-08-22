@@ -1,6 +1,7 @@
 const Organization = require('../models/organization.model');
 const Transaction = require('../models/transaction.model');
 const analyticsService = require('./analyticsService');
+const escapeRegex = require('../utils/escapeRegex');
 
 const getOrganizationBySlug = async (slug) => {
   const org = await Organization.findOne({ slug }).lean();
@@ -61,16 +62,25 @@ const getOrganizationSummary = async (slug) => {
   };
 };
 
-const getPublicContributions = async (slug, page = 1, limit = 10) => {
+const getPublicContributions = async (slug, page = 1, limit = 10, search = '') => {
   const org = await getOrganizationBySlug(slug);
   const skip = (page - 1) * limit;
 
-  const contributions = await Transaction.find({ organizationId: org._id, type: 'contribution' })
-    .sort({ date: -1 })
+  const query = { organizationId: org._id, type: 'contribution' };
+  if (search) {
+    const safeSearch = escapeRegex(search);
+    query.$or = [
+      { 'contributor.name': { $regex: safeSearch, $options: 'i' } },
+      { description: { $regex: safeSearch, $options: 'i' } }
+    ];
+  }
+
+  const contributions = await Transaction.find(query)
+    .sort({ date: -1, createdAt: -1 })
     .skip(skip)
     .limit(limit);
     
-  const total = await Transaction.countDocuments({ organizationId: org._id, type: 'contribution' });
+  const total = await Transaction.countDocuments(query);
 
   const privacyPolicy = (org.settings && org.settings.publicContributorNames) || 'anonymized';
   const publicFields = (org.contributorFields || []).filter(f => f.publicVisibility === 'visible').map(f => f.key);
@@ -108,16 +118,26 @@ const getPublicContributions = async (slug, page = 1, limit = 10) => {
   };
 };
 
-const getPublicExpenses = async (slug, page = 1, limit = 10) => {
+const getPublicExpenses = async (slug, page = 1, limit = 10, search = '') => {
   const org = await getOrganizationBySlug(slug);
   const skip = (page - 1) * limit;
 
-  const expenses = await Transaction.find({ organizationId: org._id, type: 'expense' })
-    .sort({ date: -1 })
+  const query = { organizationId: org._id, type: 'expense' };
+  if (search) {
+    const safeSearch = escapeRegex(search);
+    query.$or = [
+      { category: { $regex: safeSearch, $options: 'i' } },
+      { description: { $regex: safeSearch, $options: 'i' } },
+      { 'recipient.name': { $regex: safeSearch, $options: 'i' } }
+    ];
+  }
+
+  const expenses = await Transaction.find(query)
+    .sort({ date: -1, createdAt: -1 })
     .skip(skip)
     .limit(limit);
     
-  const total = await Transaction.countDocuments({ organizationId: org._id, type: 'expense' });
+  const total = await Transaction.countDocuments(query);
 
   const mapped = expenses.map(e => ({
     id: e._id,

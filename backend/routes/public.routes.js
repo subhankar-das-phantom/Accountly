@@ -8,7 +8,8 @@ const getPublicCacheKey = (req) => {
   const pathStr = req.path.replace(/\//g, '_');
   const pageStr = req.query.page ? `_page${req.query.page}` : '';
   const limitStr = req.query.limit ? `_limit${req.query.limit}` : '';
-  return `public_org_${slug}${pathStr}${pageStr}${limitStr}`;
+  const searchStr = req.query.search ? `_search${req.query.search}` : '';
+  return `public_org_${slug}${pathStr}${pageStr}${limitStr}${searchStr}`;
 };
 
 const cacheMiddleware = (req, res, next) => {

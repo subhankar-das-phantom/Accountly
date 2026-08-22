@@ -15,7 +15,8 @@ const getPublicContributions = async (req, res, next) => {
     const { slug } = req.params;
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 10;
-    const result = await publicService.getPublicContributions(slug, page, limit);
+    const search = req.query.search || '';
+    const result = await publicService.getPublicContributions(slug, page, limit, search);
     res.json(result);
   } catch (err) {
     next(err);
@@ -27,7 +28,8 @@ const getPublicExpenses = async (req, res, next) => {
     const { slug } = req.params;
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 10;
-    const result = await publicService.getPublicExpenses(slug, page, limit);
+    const search = req.query.search || '';
+    const result = await publicService.getPublicExpenses(slug, page, limit, search);
     res.json(result);
   } catch (err) {
     next(err);
