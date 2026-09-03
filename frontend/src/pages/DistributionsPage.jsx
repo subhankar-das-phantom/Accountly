@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { useApi } from '../hooks/useApi';
+import useDebounce from '../hooks/useDebounce';
 import distributionService from '../services/distributionService';
 import Button from '../components/common/Button';
 import Card from '../components/common/Card';
@@ -37,12 +38,18 @@ const DistributionsPage = () => {
   const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(true);
   const [selectedCampaign, setSelectedCampaign] = useState(null);
 
+  const PAGE_SIZE = 25;
+
   // Records state
   const [records, setRecords] = useState([]);
   const [isLoadingRecords, setIsLoadingRecords] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearch = useDebounce(searchQuery, 350);
   const [statusFilter, setStatusFilter] = useState('ALL'); // ALL, PENDING, DISTRIBUTED
-  const [pagination, setPagination] = useState({ page: 1, totalPages: 1, totalCount: 0 });
+  const [pagination, setPagination] = useState({ page: 1, totalPages: 1, totalCount: 0, hasMore: false });
+
+  const sentinelRef = useRef(null);
 
   // Modals & Form state
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -99,8 +106,8 @@ const DistributionsPage = () => {
     }
   }, [token, fetchCampaigns]);
 
-  // Fetch records for selected campaign
-  const fetchRecords = useCallback(async (campaignId, search = '', status = 'ALL', page = 1) => {
+  // Fetch initial page of records (25 items)
+  const fetchRecords = useCallback(async (campaignId, search = '', status = 'ALL') => {
     if (!campaignId) return;
     try {
       setIsLoadingRecords(true);
@@ -108,8 +115,8 @@ const DistributionsPage = () => {
         distributionService.getRecords(campaignId, {
           search,
           status,
-          page,
-          pageSize: 100
+          page: 1,
+          pageSize: PAGE_SIZE
         }),
         distributionService.getCampaignById(campaignId).catch(() => null)
       ]);
@@ -139,14 +146,64 @@ const DistributionsPage = () => {
 
   const selectedCampaignId = selectedCampaign?._id;
 
+  // Lazy load next 25 records
+  const loadMoreRecords = useCallback(async () => {
+    if (!selectedCampaignId || isLoadingRecords || isLoadingMore || !pagination.hasMore) return;
+    try {
+      setIsLoadingMore(true);
+      const nextPage = (pagination.page || 1) + 1;
+      const res = await distributionService.getRecords(selectedCampaignId, {
+        search: debouncedSearch,
+        status: statusFilter,
+        page: nextPage,
+        pageSize: PAGE_SIZE
+      });
+
+      setRecords(prev => {
+        const existingIds = new Set(prev.map(r => r._id));
+        const newUnique = res.records.filter(r => !existingIds.has(r._id));
+        return [...prev, ...newUnique];
+      });
+      setPagination(res.pagination);
+    } catch (err) {
+      console.error('Error loading more records:', err);
+      showToast('Failed to load more records', 'error');
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [selectedCampaignId, isLoadingRecords, isLoadingMore, pagination, debouncedSearch, statusFilter]);
+
+  // Backend search debounced & status filter trigger
   useEffect(() => {
     if (selectedCampaignId) {
-      const timer = setTimeout(() => {
-        fetchRecords(selectedCampaignId, searchQuery, statusFilter, 1);
-      }, 200);
-      return () => clearTimeout(timer);
+      fetchRecords(selectedCampaignId, debouncedSearch, statusFilter);
     }
-  }, [selectedCampaignId, searchQuery, statusFilter, fetchRecords]);
+  }, [selectedCampaignId, debouncedSearch, statusFilter, fetchRecords]);
+
+  // Infinite Scroll / Lazy Load IntersectionObserver
+  useEffect(() => {
+    if (!pagination.hasMore || isLoadingRecords || isLoadingMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          loadMoreRecords();
+        }
+      },
+      { threshold: 0.1, rootMargin: '150px' }
+    );
+
+    const currentSentinel = sentinelRef.current;
+    if (currentSentinel) {
+      observer.observe(currentSentinel);
+    }
+
+    return () => {
+      if (currentSentinel) {
+        observer.unobserve(currentSentinel);
+      }
+    };
+  }, [pagination.hasMore, isLoadingRecords, isLoadingMore, loadMoreRecords]);
 
   // Keyboard shortcut to focus search
   useEffect(() => {
@@ -697,7 +754,11 @@ const DistributionsPage = () => {
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
               {/* Search Bar */}
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                {searchQuery !== debouncedSearch ? (
+                  <RefreshCw className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-blue-500 animate-spin" />
+                ) : (
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                )}
                 <input
                   ref={searchInputRef}
                   type="text"
@@ -922,6 +983,20 @@ const DistributionsPage = () => {
                             </tr>
                           );
                         })}
+
+                        {/* Lazy Loading Skeleton Rows for Desktop */}
+                        {isLoadingMore && [1, 2, 3].map(i => (
+                          <tr key={`loading-more-desktop-${i}`} className="animate-pulse bg-gray-50/50 dark:bg-gray-800/40">
+                            <td className="px-4 py-3"><div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-28" /></td>
+                            {configuredFields.map(f => (
+                              <td key={f.key} className="px-4 py-3"><div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-16" /></td>
+                            ))}
+                            <td className="px-4 py-3"><div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-16" /></td>
+                            <td className="px-4 py-3"><div className="h-5 bg-gray-200 dark:bg-gray-700 rounded-full w-20" /></td>
+                            <td className="px-4 py-3"><div className="h-3.5 bg-gray-100 dark:bg-gray-800 rounded w-24" /></td>
+                            <td className="px-4 py-3 text-right"><div className="h-7 bg-gray-200 dark:bg-gray-700 rounded-lg w-20 ml-auto" /></td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </Card>
@@ -1007,6 +1082,38 @@ const DistributionsPage = () => {
                       </Card>
                     );
                   })}
+
+                  {/* Lazy Loading Skeleton Cardlets for Mobile */}
+                  {isLoadingMore && [1, 2].map(i => (
+                    <Card key={`mobile-loading-more-${i}`} className="p-3.5 border border-gray-200 dark:border-gray-700 animate-pulse space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-32" />
+                        <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded-full w-16" />
+                      </div>
+                      <div className="h-3.5 bg-gray-200 dark:bg-gray-700 rounded w-24" />
+                      <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded-lg w-full" />
+                    </Card>
+                  ))}
+                </div>
+
+                {/* Sentinel & Lazy Load Footer */}
+                <div ref={sentinelRef} className="pt-3 pb-2 text-center">
+                  {pagination.hasMore ? (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={loadMoreRecords}
+                      isLoading={isLoadingMore}
+                      icon={RefreshCw}
+                      className="text-xs"
+                    >
+                      {isLoadingMore ? 'Loading next 25...' : `Load Next 25 (${pagination.totalCount - records.length} remaining)`}
+                    </Button>
+                  ) : records.length > 0 ? (
+                    <p className="text-xs text-gray-400 dark:text-gray-500">
+                      Showing all {records.length} of {pagination.totalCount} contributors
+                    </p>
+                  ) : null}
                 </div>
               </>
             )}
