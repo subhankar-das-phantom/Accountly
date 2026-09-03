@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useContext, useRef, useCallback } from 'react';
+import useSWRInfinite from 'swr/infinite';
+import { useInView } from 'react-intersection-observer';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Package, 
@@ -20,7 +22,7 @@ import {
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { useApi } from '../hooks/useApi';
-import useDebounce from '../hooks/useDebounce';
+import api from '../services/api';
 import distributionService from '../services/distributionService';
 import Button from '../components/common/Button';
 import Card from '../components/common/Card';
@@ -28,7 +30,7 @@ import Badge from '../components/common/Badge';
 import { formatCurrency } from '../utils/currency';
 
 const DistributionsPage = () => {
-  const { token, user } = useContext(AuthContext);
+  const { token } = useContext(AuthContext);
   const { data: orgData } = useApi(token ? 'organizations' : null);
   const activeOrg = orgData && orgData.length > 0 ? orgData[0] : null;
   const isArchived = activeOrg?.status === 'ARCHIVED';
@@ -38,18 +40,18 @@ const DistributionsPage = () => {
   const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(true);
   const [selectedCampaign, setSelectedCampaign] = useState(null);
 
-  const PAGE_SIZE = 25;
-
-  // Records state
-  const [records, setRecords] = useState([]);
-  const [isLoadingRecords, setIsLoadingRecords] = useState(false);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const debouncedSearch = useDebounce(searchQuery, 350);
+  // Search and Filter states (modeled like PublicTransactionList)
+  const [searchInput, setSearchInput] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL'); // ALL, PENDING, DISTRIBUTED
-  const [pagination, setPagination] = useState({ page: 1, totalPages: 1, totalCount: 0, hasMore: false });
 
-  const sentinelRef = useRef(null);
+  // Debounce search input by 300ms for instant typing feel
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchInput.trim());
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchInput]);
 
   // Modals & Form state
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -106,106 +108,60 @@ const DistributionsPage = () => {
     }
   }, [token, fetchCampaigns]);
 
-  // Fetch initial page of records (25 items)
-  const fetchRecords = useCallback(async (campaignId, search = '', status = 'ALL') => {
-    if (!campaignId) return;
-    try {
-      setIsLoadingRecords(true);
-      const [res, campDetails] = await Promise.all([
-        distributionService.getRecords(campaignId, {
-          search,
-          status,
-          page: 1,
-          pageSize: PAGE_SIZE
-        }),
-        distributionService.getCampaignById(campaignId).catch(() => null)
-      ]);
-      setRecords(res.records);
-      setPagination(res.pagination);
-      if (campDetails?.stats) {
-        setSelectedCampaign(prev => {
-          if (!prev || prev._id !== campaignId) return prev;
-          if (
-            prev.stats?.eligibleCount === campDetails.stats.eligibleCount &&
-            prev.stats?.distributedCount === campDetails.stats.distributedCount &&
-            prev.stats?.remainingCount === campDetails.stats.remainingCount &&
-            prev.stats?.progressPercentage === campDetails.stats.progressPercentage
-          ) {
-            return prev;
-          }
-          return { ...prev, stats: campDetails.stats };
-        });
-      }
-    } catch (err) {
-      console.error('Error fetching records:', err);
-      showToast('Failed to load distribution records', 'error');
-    } finally {
-      setIsLoadingRecords(false);
-    }
-  }, []);
-
+  // ========================================================
+  // SWR INFINITE RECORDS FETCHING (Identical to PublicTransactionList)
+  // ========================================================
   const selectedCampaignId = selectedCampaign?._id;
 
-  // Lazy load next 25 records
-  const loadMoreRecords = useCallback(async () => {
-    if (!selectedCampaignId || isLoadingRecords || isLoadingMore || !pagination.hasMore) return;
-    try {
-      setIsLoadingMore(true);
-      const nextPage = (pagination.page || 1) + 1;
-      const res = await distributionService.getRecords(selectedCampaignId, {
-        search: debouncedSearch,
-        status: statusFilter,
-        page: nextPage,
-        pageSize: PAGE_SIZE
-      });
-
-      setRecords(prev => {
-        const existingIds = new Set(prev.map(r => r._id));
-        const newUnique = res.records.filter(r => !existingIds.has(r._id));
-        return [...prev, ...newUnique];
-      });
-      setPagination(res.pagination);
-    } catch (err) {
-      console.error('Error loading more records:', err);
-      showToast('Failed to load more records', 'error');
-    } finally {
-      setIsLoadingMore(false);
+  const getKey = (pageIndex, previousPageData) => {
+    if (!selectedCampaignId) return null;
+    // Stop if reached the end of pages
+    if (previousPageData && (pageIndex >= previousPageData.pagination?.totalPages || previousPageData.records?.length === 0)) {
+      return null;
     }
-  }, [selectedCampaignId, isLoadingRecords, isLoadingMore, pagination, debouncedSearch, statusFilter]);
+    const searchParam = debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : '';
+    const statusParam = statusFilter && statusFilter !== 'ALL' ? `&status=${statusFilter}` : '';
+    return `/distributions/campaigns/${selectedCampaignId}/records?page=${pageIndex + 1}&pageSize=25${searchParam}${statusParam}`;
+  };
 
-  // Backend search debounced & status filter trigger
+  const {
+    data,
+    error: recordsError,
+    size,
+    setSize,
+    isValidating,
+    mutate: mutateRecords
+  } = useSWRInfinite(
+    getKey,
+    (url) => api.get(url).then(res => res.data),
+    {
+      revalidateOnFocus: false,
+      revalidateFirstPage: false,
+      dedupingInterval: 1000
+    }
+  );
+
+  // Infinite Scroll IntersectionObserver (from react-intersection-observer, identical to PublicTransactionList)
+  const { ref: loadMoreRef, inView } = useInView({
+    threshold: 0.1,
+    rootMargin: '200px'
+  });
+
+  // Flatten SWR pages into a single flat array
+  const records = data ? data.flatMap(page => page.records) : [];
+  const totalCount = data?.[0]?.pagination?.totalCount ?? 0;
+  const isReachingEnd = !data || (data[data.length - 1]?.records?.length < 25) || (records.length >= totalCount);
+  const isLoadingInitialData = !data && !recordsError && Boolean(selectedCampaignId);
+  const isLoadingMore = !isLoadingInitialData && isValidating && size > 1;
+  const isEmpty = !isLoadingInitialData && records.length === 0;
+
   useEffect(() => {
-    if (selectedCampaignId) {
-      fetchRecords(selectedCampaignId, debouncedSearch, statusFilter);
+    if (inView && !isReachingEnd && !isValidating) {
+      setSize(prev => prev + 1);
     }
-  }, [selectedCampaignId, debouncedSearch, statusFilter, fetchRecords]);
+  }, [inView, isReachingEnd, isValidating, setSize]);
 
-  // Infinite Scroll / Lazy Load IntersectionObserver
-  useEffect(() => {
-    if (!pagination.hasMore || isLoadingRecords || isLoadingMore) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          loadMoreRecords();
-        }
-      },
-      { threshold: 0.1, rootMargin: '150px' }
-    );
-
-    const currentSentinel = sentinelRef.current;
-    if (currentSentinel) {
-      observer.observe(currentSentinel);
-    }
-
-    return () => {
-      if (currentSentinel) {
-        observer.unobserve(currentSentinel);
-      }
-    };
-  }, [pagination.hasMore, isLoadingRecords, isLoadingMore, loadMoreRecords]);
-
-  // Keyboard shortcut to focus search
+  // Focus search with '/' shortcut
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === '/' && document.activeElement !== searchInputRef.current) {
@@ -213,7 +169,7 @@ const DistributionsPage = () => {
         searchInputRef.current?.focus();
       }
       if (e.key === 'Escape' && document.activeElement === searchInputRef.current) {
-        setSearchQuery('');
+        setSearchInput('');
         searchInputRef.current?.blur();
       }
     };
@@ -298,7 +254,7 @@ const DistributionsPage = () => {
         showToast('All eligible contributors are already enrolled.');
       }
       await fetchCampaigns();
-      fetchRecords(selectedCampaign._id, searchQuery, statusFilter, 1);
+      await mutateRecords();
     } catch (err) {
       console.error('Error syncing contributors:', err);
       showToast('Failed to sync contributors', 'error');
@@ -307,7 +263,7 @@ const DistributionsPage = () => {
     }
   };
 
-  // Distribute Record with concurrency conflict handling
+  // Distribute Record with optimistic SWR cache update & concurrency conflict handling
   const handleDistribute = async (record) => {
     if (isArchived) {
       showToast('Organization is archived (Read-Only)', 'error');
@@ -318,14 +274,24 @@ const DistributionsPage = () => {
       showToast('Campaign ID is missing', 'error');
       return;
     }
+
     try {
       setIsDistributingId(record._id);
       const updated = await distributionService.distributeRecord(campaignId, record._id);
       
-      // Update local record
-      setRecords(prev => prev.map(r => r._id === record._id ? { ...r, ...updated } : r));
-      
-      // Update campaign stats
+      // Optimistically update SWR cache in memory for instantaneous UI response
+      mutateRecords(
+        prevPages => {
+          if (!prevPages) return prevPages;
+          return prevPages.map(page => ({
+            ...page,
+            records: page.records.map(r => r._id === record._id ? { ...r, ...updated } : r)
+          }));
+        },
+        false
+      );
+
+      // Update live campaign stats
       setSelectedCampaign(prev => {
         if (!prev) return prev;
         const newDist = (prev.stats?.distributedCount || 0) + 1;
@@ -350,12 +316,21 @@ const DistributionsPage = () => {
           `Conflict: Already distributed by ${conflict.distributedBy || 'another admin'} at ${new Date(conflict.distributedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, 
           'error'
         );
-        setRecords(prev => prev.map(r => r._id === record._id ? {
-          ...r,
-          status: 'DISTRIBUTED',
-          distributedAt: conflict.distributedAt,
-          distributedBy: { username: conflict.distributedBy }
-        } : r));
+        mutateRecords(
+          prevPages => {
+            if (!prevPages) return prevPages;
+            return prevPages.map(page => ({
+              ...page,
+              records: page.records.map(r => r._id === record._id ? {
+                ...r,
+                status: 'DISTRIBUTED',
+                distributedAt: conflict.distributedAt,
+                distributedBy: { username: conflict.distributedBy }
+              } : r)
+            }));
+          },
+          false
+        );
       } else {
         showToast(err.response?.data?.message || 'Failed to mark as distributed', 'error');
       }
@@ -364,11 +339,12 @@ const DistributionsPage = () => {
     }
   };
 
-  // Undo Distribution
+  // Undo Distribution with optimistic SWR cache update
   const handleConfirmUndo = async () => {
     if (!undoModalRecord) return;
     const campaignId = undoModalRecord.campaignId || selectedCampaign?._id;
     if (!campaignId) return;
+
     try {
       setIsUndoing(true);
       const updated = await distributionService.undoDistribution(
@@ -377,7 +353,16 @@ const DistributionsPage = () => {
         undoReason
       );
 
-      setRecords(prev => prev.map(r => r._id === undoModalRecord._id ? { ...r, ...updated } : r));
+      mutateRecords(
+        prevPages => {
+          if (!prevPages) return prevPages;
+          return prevPages.map(page => ({
+            ...page,
+            records: page.records.map(r => r._id === undoModalRecord._id ? { ...r, ...updated } : r)
+          }));
+        },
+        false
+      );
 
       setSelectedCampaign(prev => {
         if (!prev) return prev;
@@ -595,7 +580,11 @@ const DistributionsPage = () => {
                           variant="primary"
                           size="sm"
                           className="flex-1 py-1.5 text-xs font-semibold"
-                          onClick={() => setSelectedCampaign(camp)}
+                          onClick={() => {
+                            setSelectedCampaign(camp);
+                            setSearchInput('');
+                            setDebouncedSearch('');
+                          }}
                         >
                           Open Counter
                         </Button>
@@ -642,7 +631,11 @@ const DistributionsPage = () => {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center space-x-2.5">
                 <button
-                  onClick={() => setSelectedCampaign(null)}
+                  onClick={() => {
+                    setSelectedCampaign(null);
+                    setSearchInput('');
+                    setDebouncedSearch('');
+                  }}
                   className="p-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors shadow-sm"
                   title="Back to campaigns"
                 >
@@ -750,11 +743,11 @@ const DistributionsPage = () => {
               </Card>
             </div>
 
-            {/* Search & Status Filter Controls */}
+            {/* Search & Status Filter Controls (Speed & Accuracy Optimized) */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-              {/* Search Bar */}
+              {/* Search Bar - Realtime typing + Debounced SWR execution */}
               <div className="relative flex-1">
-                {searchQuery !== debouncedSearch ? (
+                {searchInput !== debouncedSearch || (isValidating && !isLoadingMore) ? (
                   <RefreshCw className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-blue-500 animate-spin" />
                 ) : (
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -762,15 +755,16 @@ const DistributionsPage = () => {
                 <input
                   ref={searchInputRef}
                   type="text"
-                  placeholder="Search contributor name, ID, or metadata... (Press /)"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search contributor name... (Press / to focus)"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
                   className="w-full pl-9 pr-9 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                 />
-                {searchQuery && (
+                {searchInput && (
                   <button
                     onClick={() => {
-                      setSearchQuery('');
+                      setSearchInput('');
+                      setDebouncedSearch('');
                       searchInputRef.current?.focus();
                     }}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
@@ -790,7 +784,7 @@ const DistributionsPage = () => {
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
                   }`}
                 >
-                  All ({pagination.totalCount || 0})
+                  All ({totalCount})
                 </button>
                 <button
                   onClick={() => setStatusFilter('PENDING')}
@@ -815,7 +809,10 @@ const DistributionsPage = () => {
               </div>
             </div>
 
-            {isLoadingRecords ? (
+            {/* ======================================================== */}
+            {/* CONTENT AREA: DESKTOP TABLE + MOBILE OPTIMIZED LIST */}
+            {/* ======================================================== */}
+            {isLoadingInitialData ? (
               <div className="space-y-3">
                 {/* Desktop Table Skeleton */}
                 <div className="hidden md:block">
@@ -865,15 +862,15 @@ const DistributionsPage = () => {
                   ))}
                 </div>
               </div>
-            ) : records.length === 0 ? (
+            ) : isEmpty ? (
               <Card className="py-12 text-center">
                 <Users className="w-10 h-10 mx-auto text-gray-400 mb-2" />
                 <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
                   No contributors found
                 </h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {searchQuery
-                    ? `No record matching "${searchQuery}".`
+                  {debouncedSearch
+                    ? `No contributor matching "${debouncedSearch}".`
                     : 'No records match the current status filter.'}
                 </p>
               </Card>
@@ -1096,22 +1093,22 @@ const DistributionsPage = () => {
                   ))}
                 </div>
 
-                {/* Sentinel & Lazy Load Footer */}
-                <div ref={sentinelRef} className="pt-3 pb-2 text-center">
-                  {pagination.hasMore ? (
+                {/* Infinite Scroll / InView Sentinel (Exact mechanism as PublicTransactionList) */}
+                <div ref={loadMoreRef} className="pt-4 pb-2 text-center">
+                  {!isReachingEnd ? (
                     <Button
                       variant="secondary"
                       size="sm"
-                      onClick={loadMoreRecords}
+                      onClick={() => setSize(size + 1)}
                       isLoading={isLoadingMore}
                       icon={RefreshCw}
                       className="text-xs"
                     >
-                      {isLoadingMore ? 'Loading next 25...' : `Load Next 25 (${pagination.totalCount - records.length} remaining)`}
+                      {isLoadingMore ? 'Loading next 25...' : `Load Next 25 (${totalCount - records.length} remaining)`}
                     </Button>
                   ) : records.length > 0 ? (
                     <p className="text-xs text-gray-400 dark:text-gray-500">
-                      Showing all {records.length} of {pagination.totalCount} contributors
+                      Showing all {records.length} of {totalCount} contributors
                     </p>
                   ) : null}
                 </div>
@@ -1130,7 +1127,7 @@ const DistributionsPage = () => {
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
-                className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 w-full max-w-lg p-5 sm:p-6 space-y-4"
+                className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 w-full max-w-lg p-5 sm:p-6 space-y-3.5"
               >
                 <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-700">
                   <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">

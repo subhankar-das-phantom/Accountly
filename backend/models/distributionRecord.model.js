@@ -61,6 +61,7 @@ distributionRecordSchema.index({ campaignId: 1, contributionId: 1 }, { unique: t
 // Efficient lookups for campaign-level counter views and status filtering
 distributionRecordSchema.index({ organizationId: 1, campaignId: 1, status: 1 });
 distributionRecordSchema.index({ organizationId: 1, campaignId: 1, 'contributor.name': 1 });
+distributionRecordSchema.index({ organizationId: 1, campaignId: 1, 'contributor.name': 1, status: 1 });
 
 const DistributionRecord = mongoose.model('DistributionRecord', distributionRecordSchema);
 

@@ -379,18 +379,22 @@ const syncEligibleContributors = async (organizationId, campaignId) => {
  * Get distribution records for a campaign with search & dynamic metadata filtering
  */
 const getRecords = async (organizationId, campaignId, queryParams = {}) => {
-  // Auto-sync any newly added contributions for active campaigns
-  const campaign = await DistributionCampaign.findOne({ _id: campaignId, organizationId });
-  if (campaign && campaign.status === 'ACTIVE') {
-    await enrollEligibleContributions(campaign);
-  }
-
   const {
     search,
     status,
     page = 1,
     pageSize = 25
   } = queryParams;
+
+  const isSearch = search && search.trim().length > 0;
+
+  // Auto-sync new contributions only on non-search initial load
+  if (!isSearch && (!page || parseInt(page, 10) === 1)) {
+    const campaign = await DistributionCampaign.findOne({ _id: campaignId, organizationId });
+    if (campaign && campaign.status === 'ACTIVE') {
+      await enrollEligibleContributions(campaign);
+    }
+  }
 
   const filter = {
     organizationId,
@@ -401,14 +405,11 @@ const getRecords = async (organizationId, campaignId, queryParams = {}) => {
     filter.status = status;
   }
 
-  if (search && search.trim().length > 0) {
+  if (isSearch) {
     const trimmed = search.trim();
     const escaped = escapeRegex(trimmed);
 
-    // Fetch org contributorFields to build authorized metadata search paths
-    const org = await Organization.findById(organizationId).lean();
-    const configuredFields = org?.contributorFields || [];
-
+    // Contributor name is the primary search field (indexed, fast & accurate)
     const orConditions = [
       { 'contributor.name': { $regex: escaped, $options: 'i' } }
     ];
@@ -420,14 +421,8 @@ const getRecords = async (organizationId, campaignId, queryParams = {}) => {
       orConditions.push({ _id: objId });
     }
 
-    // Secure search matching ONLY configured contributorFields keys
-    for (const field of configuredFields) {
-      if (field.key) {
-        orConditions.push({
-          [`contributor.metadata.${field.key}`]: { $regex: escaped, $options: 'i' }
-        });
-      }
-    }
+    // Also match on notes
+    orConditions.push({ notes: { $regex: escaped, $options: 'i' } });
 
     filter.$or = orConditions;
   }
