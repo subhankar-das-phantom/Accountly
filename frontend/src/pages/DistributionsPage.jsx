@@ -80,23 +80,24 @@ const DistributionsPage = () => {
       setIsLoadingCampaigns(true);
       const data = await distributionService.getCampaigns();
       setCampaigns(data);
-      if (selectedCampaign) {
-        const updated = data.find(c => c._id === selectedCampaign._id);
-        if (updated) setSelectedCampaign(updated);
-      }
+      setSelectedCampaign(prev => {
+        if (!prev) return null;
+        const updated = data.find(c => c._id === prev._id);
+        return updated || prev;
+      });
     } catch (err) {
       console.error('Error fetching campaigns:', err);
       showToast('Failed to load distribution campaigns', 'error');
     } finally {
       setIsLoadingCampaigns(false);
     }
-  }, [selectedCampaign]);
+  }, []);
 
   useEffect(() => {
     if (token) {
       fetchCampaigns();
     }
-  }, [token]);
+  }, [token, fetchCampaigns]);
 
   // Fetch records for selected campaign
   const fetchRecords = useCallback(async (campaignId, search = '', status = 'ALL', page = 1) => {
@@ -114,8 +115,19 @@ const DistributionsPage = () => {
       ]);
       setRecords(res.records);
       setPagination(res.pagination);
-      if (campDetails) {
-        setSelectedCampaign(campDetails);
+      if (campDetails?.stats) {
+        setSelectedCampaign(prev => {
+          if (!prev || prev._id !== campaignId) return prev;
+          if (
+            prev.stats?.eligibleCount === campDetails.stats.eligibleCount &&
+            prev.stats?.distributedCount === campDetails.stats.distributedCount &&
+            prev.stats?.remainingCount === campDetails.stats.remainingCount &&
+            prev.stats?.progressPercentage === campDetails.stats.progressPercentage
+          ) {
+            return prev;
+          }
+          return { ...prev, stats: campDetails.stats };
+        });
       }
     } catch (err) {
       console.error('Error fetching records:', err);
@@ -125,14 +137,16 @@ const DistributionsPage = () => {
     }
   }, []);
 
+  const selectedCampaignId = selectedCampaign?._id;
+
   useEffect(() => {
-    if (selectedCampaign) {
+    if (selectedCampaignId) {
       const timer = setTimeout(() => {
-        fetchRecords(selectedCampaign._id, searchQuery, statusFilter, 1);
+        fetchRecords(selectedCampaignId, searchQuery, statusFilter, 1);
       }, 200);
       return () => clearTimeout(timer);
     }
-  }, [selectedCampaign, searchQuery, statusFilter, fetchRecords]);
+  }, [selectedCampaignId, searchQuery, statusFilter, fetchRecords]);
 
   // Keyboard shortcut to focus search
   useEffect(() => {
@@ -740,13 +754,55 @@ const DistributionsPage = () => {
               </div>
             </div>
 
-            {/* ======================================================== */}
-            {/* CONTENT AREA: DESKTOP TABLE + MOBILE OPTIMIZED LIST */}
-            {/* ======================================================== */}
             {isLoadingRecords ? (
-              <div className="py-12 text-center text-gray-500">
-                <RefreshCw className="w-6 h-6 mx-auto animate-spin mb-2 text-blue-500" />
-                <span className="text-sm">Loading records...</span>
+              <div className="space-y-3">
+                {/* Desktop Table Skeleton */}
+                <div className="hidden md:block">
+                  <Card className="overflow-hidden p-0 border border-gray-200 dark:border-gray-700 shadow-sm">
+                    <div className="bg-gray-50/80 dark:bg-gray-800/80 px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                      <div className="h-3.5 bg-gray-200 dark:bg-gray-700 rounded w-28 animate-pulse" />
+                      <div className="h-3.5 bg-gray-200 dark:bg-gray-700 rounded w-20 animate-pulse" />
+                    </div>
+                    <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                      {[1, 2, 3, 4, 5, 6].map((i) => (
+                        <div key={i} className="px-4 py-3 flex items-center justify-between gap-4 animate-pulse">
+                          <div className="flex items-center space-x-3 w-1/4">
+                            <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex-shrink-0" />
+                            <div className="space-y-1.5 flex-1 min-w-0">
+                              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
+                              <div className="h-2.5 bg-gray-100 dark:bg-gray-800 rounded w-1/2" />
+                            </div>
+                          </div>
+                          {configuredFields.map(f => (
+                            <div key={f.key} className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-16" />
+                          ))}
+                          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-16" />
+                          <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded-full w-20" />
+                          <div className="h-3.5 bg-gray-100 dark:bg-gray-800 rounded w-24" />
+                          <div className="h-7 bg-gray-200 dark:bg-gray-700 rounded-lg w-20" />
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                </div>
+
+                {/* Mobile List Skeleton */}
+                <div className="md:hidden space-y-2.5">
+                  {[1, 2, 3, 4].map((i) => (
+                    <Card key={i} className="p-3.5 border border-gray-200 dark:border-gray-700 animate-pulse space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-36" />
+                        <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded-full w-16" />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="h-3.5 bg-gray-200 dark:bg-gray-700 rounded w-20" />
+                        <div className="h-4 bg-gray-100 dark:bg-gray-800 rounded w-16" />
+                        <div className="h-4 bg-gray-100 dark:bg-gray-800 rounded w-14" />
+                      </div>
+                      <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded-lg w-full" />
+                    </Card>
+                  ))}
+                </div>
               </div>
             ) : records.length === 0 ? (
               <Card className="py-12 text-center">
