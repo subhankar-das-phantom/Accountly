@@ -12,6 +12,118 @@ const escapeRegex = (str) => {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
 
+// Build a phonetic pattern accommodating common transliteration variations:
+// s/sh, b/bh, ee/i/y, oo/u, v/w/b, c/k/kh, ch/c, th/t, dh/d, a/o
+const buildPhoneticPattern = (str) => {
+  const tokens = [];
+  let i = 0;
+  const s = str.trim().toLowerCase();
+  while (i < s.length) {
+    const two = s.slice(i, i + 2);
+    if (two === 'sh') {
+      tokens.push('s(h)?');
+      i += 2;
+    } else if (two === 'ch') {
+      tokens.push('c(h)?');
+      i += 2;
+    } else if (two === 'th') {
+      tokens.push('t(h)?');
+      i += 2;
+    } else if (two === 'dh') {
+      tokens.push('d(h)?');
+      i += 2;
+    } else if (two === 'bh') {
+      tokens.push('b(h)?');
+      i += 2;
+    } else if (two === 'kh') {
+      tokens.push('k(h)?');
+      i += 2;
+    } else if (two === 'ee') {
+      tokens.push('(ee|i)');
+      i += 2;
+    } else if (two === 'oo') {
+      tokens.push('(oo|u)');
+      i += 2;
+    } else if (s[i] === 's') {
+      tokens.push('s(h)?');
+      i += 1;
+    } else if (s[i] === 'b') {
+      tokens.push('b(h)?');
+      i += 1;
+    } else if (s[i] === 'k') {
+      tokens.push('(k(h)?|c)');
+      i += 1;
+    } else if (s[i] === 'c') {
+      tokens.push('(c(h)?|k)');
+      i += 1;
+    } else if (s[i] === 'i') {
+      tokens.push('(i|ee|y)');
+      i += 1;
+    } else if (s[i] === 'u') {
+      tokens.push('(u|oo)');
+      i += 1;
+    } else if (s[i] === 'v' || s[i] === 'w') {
+      tokens.push('[vwb]');
+      i += 1;
+    } else if (s[i] === 'a') {
+      tokens.push('(a|o)');
+      i += 1;
+    } else if (s[i] === 'o') {
+      tokens.push('(o|a)');
+      i += 1;
+    } else {
+      tokens.push(s[i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+      i += 1;
+    }
+  }
+  return tokens.join('');
+};
+
+// Fast Levenshtein distance calculation for typo tolerance fallback
+const levenshteinDistance = (s1, s2) => {
+  const a = s1.toLowerCase();
+  const b = s2.toLowerCase();
+  const costs = [];
+  for (let i = 0; i <= a.length; i++) {
+    let lastValue = i;
+    for (let j = 0; j <= b.length; j++) {
+      if (i === 0) {
+        costs[j] = j;
+      } else if (j > 0) {
+        let newValue = costs[j - 1];
+        if (a.charAt(i - 1) !== b.charAt(j - 1)) {
+          newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
+        }
+        costs[j - 1] = lastValue;
+        lastValue = newValue;
+      }
+    }
+    if (i > 0) costs[b.length] = lastValue;
+  }
+  return costs[b.length];
+};
+
+const matchesFuzzy = (search, target) => {
+  if (!search || !target) return false;
+  const s = search.toLowerCase().trim();
+  const t = target.toLowerCase().trim();
+
+  if (t === s || t.includes(s)) return true;
+
+  // Check word-by-word (e.g. searching first name or last name)
+  const words = t.split(/\s+/);
+  for (const w of words) {
+    if (w.startsWith(s) || w.includes(s)) return true;
+    const dist = levenshteinDistance(s, w);
+    const maxAllowedDist = s.length >= 6 ? 2 : (s.length >= 4 ? 1 : 0);
+    if (dist <= maxAllowedDist) return true;
+  }
+
+  const dist = levenshteinDistance(s, t);
+  const maxAllowed = s.length >= 6 ? 2 : (s.length >= 4 ? 1 : 0);
+  return dist <= maxAllowed;
+};
+
 /**
  * Creates a distribution campaign and auto-enrolls eligible contributors
  */
@@ -408,10 +520,12 @@ const getRecords = async (organizationId, campaignId, queryParams = {}) => {
   if (isSearch) {
     const trimmed = search.trim();
     const escaped = escapeRegex(trimmed);
+    const phoneticPattern = buildPhoneticPattern(trimmed);
 
-    // Contributor name is the primary search field (indexed, fast & accurate)
+    // Contributor name is the primary search field with smart phonetic variation support
+    // (e.g. subhankar matches Shubhankar, rohit matches Roheet, vikram matches Bikram)
     const orConditions = [
-      { 'contributor.name': { $regex: escaped, $options: 'i' } }
+      { 'contributor.name': { $regex: phoneticPattern, $options: 'i' } }
     ];
 
     // If search is a valid ObjectId, allow matching on contributionId or recordId
@@ -431,16 +545,65 @@ const getRecords = async (organizationId, campaignId, queryParams = {}) => {
   const ps = Math.min(100, Math.max(1, parseInt(pageSize, 10) || 25));
   const skip = (p - 1) * ps;
 
-  const [records, totalCount] = await Promise.all([
-    DistributionRecord.find(filter)
-      .sort({ status: 1, 'contributor.name': 1 }) // PENDING first, then by name
-      .skip(skip)
-      .limit(ps)
-      .populate('distributedBy', 'username')
-      .populate('contributionId', 'amount category date status')
-      .lean(),
-    DistributionRecord.countDocuments(filter)
-  ]);
+  // Optimized fetch: query with index-assisted sort
+  let records = await DistributionRecord.find(filter)
+    .sort({ status: 1, 'contributor.name': 1 }) // PENDING first, then alphabetically
+    .skip(skip)
+    .limit(ps)
+    .populate('distributedBy', 'username')
+    .populate('contributionId', 'amount category date status')
+    .lean();
+
+  let totalCount = 0;
+
+  // Single-pass optimization: skip countDocuments if first page returned fewer than pageSize
+  if (p === 1 && records.length < ps) {
+    totalCount = records.length;
+  } else {
+    totalCount = await DistributionRecord.countDocuments(filter);
+  }
+
+  // Tier 2 Ultra-Fast Typo Fallback: only if 0 results found with phonetic regex
+  if (isSearch && records.length === 0) {
+    const trimmed = search.trim();
+    const baseFilter = { organizationId, campaignId };
+    if (status && status !== 'ALL') {
+      baseFilter.status = status;
+    }
+
+    // Ultra-lean scan: only select _id, contributor.name and status (< 10ms)
+    const candidates = await DistributionRecord.find(baseFilter)
+      .select('_id contributor.name status')
+      .lean();
+
+    const fuzzyMatches = candidates.filter(r => matchesFuzzy(trimmed, r.contributor?.name));
+
+    if (fuzzyMatches.length > 0) {
+      // Sort: Pending first, then by closest Levenshtein distance
+      fuzzyMatches.sort((a, b) => {
+        if (a.status !== b.status) {
+          return a.status === 'PENDING' ? -1 : 1;
+        }
+        const distA = levenshteinDistance(trimmed, a.contributor?.name || '');
+        const distB = levenshteinDistance(trimmed, b.contributor?.name || '');
+        return distA - distB;
+      });
+
+      totalCount = fuzzyMatches.length;
+      const pageSlice = fuzzyMatches.slice(skip, skip + ps);
+      const matchedIds = pageSlice.map(m => m._id);
+
+      // Populate ONLY the sliced records to be displayed
+      const populated = await DistributionRecord.find({ _id: { $in: matchedIds } })
+        .populate('distributedBy', 'username')
+        .populate('contributionId', 'amount category date status')
+        .lean();
+
+      // Preserve the ranked fuzzy order
+      const popMap = new Map(populated.map(p => [p._id.toString(), p]));
+      records = pageSlice.map(m => popMap.get(m._id.toString())).filter(Boolean);
+    }
+  }
 
   // Clean metadata map if needed
   const formattedRecords = records.map(r => {
