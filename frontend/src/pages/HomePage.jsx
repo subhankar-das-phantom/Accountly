@@ -17,6 +17,7 @@ import {
   AlertCircle,
   CheckCircle,
   Wallet,
+  Package,
 } from "lucide-react";
 
 import Chart from "../components/Chart";
@@ -43,6 +44,7 @@ const HomePage = () => {
   const { data: allTransactionsRaw, isLoading: isLoadingTransactions, mutate: mutateTransactions, isValidating: isValidatingTransactions } = useApi(token ? 'transactions' : null);
   const { data: analyticsData, isLoading: isLoadingStats, isValidating: isValidatingStats } = useApi(token ? `analytics/analytics?periodType=${timeFilter}` : null);
   const { data: budgetData, isLoading: isLoadingBudget, isValidating: isValidatingBudget } = useApi(token ? `analytics/budget-vs-actual?month=${now.getMonth() + 1}&year=${now.getFullYear()}` : null);
+  const { data: campaignsData } = useApi(token ? 'distributions/campaigns' : null);
 
   const activeOrg = orgData && orgData.length > 0 ? orgData[0] : null;
 
@@ -584,12 +586,78 @@ const HomePage = () => {
             </motion.div>
           )}
 
+          {/* Active Distributions Widget */}
+          {campaignsData && campaignsData.filter(c => c.status === 'ACTIVE').length > 0 && (
+            <motion.div variants={itemVariants}>
+              <Card className="p-4 sm:p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <div className="flex items-center space-x-2.5">
+                    <div className="p-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl">
+                      <Package className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white">
+                        Active Distributions
+                      </h2>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Live benefit campaigns and distribution progress
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => navigate('/distributions')}
+                  >
+                    View All
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {campaignsData.filter(c => c.status === 'ACTIVE').slice(0, 2).map((camp) => (
+                    <div
+                      key={camp._id}
+                      className="p-4 rounded-xl border border-gray-100 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-800/60 flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-sm font-bold text-gray-900 dark:text-white line-clamp-1">{camp.name}</span>
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-medium">
+                            {camp.itemName}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400 mb-1.5">
+                          <span>{camp.stats?.distributedCount || 0} / {camp.stats?.eligibleCount || 0} distributed</span>
+                          <span className="font-semibold text-gray-900 dark:text-white">{camp.stats?.progressPercentage || 0}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-3">
+                          <div
+                            className="bg-gradient-to-r from-blue-600 to-emerald-500 h-2 rounded-full transition-all"
+                            style={{ width: `${camp.stats?.progressPercentage || 0}%` }}
+                          />
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        onClick={() => navigate('/distributions')}
+                        className="w-full py-1.5 text-xs"
+                      >
+                        Open Distribution Counter
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </motion.div>
+          )}
+
           {/* Quick Actions */}
           <Card className="p-4 sm:p-6">
             <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white mb-4">
               Quick Actions
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <ExcelExportButton organizationId={activeOrg?._id} />
               
               <QuickActionCard
@@ -609,6 +677,14 @@ const HomePage = () => {
                   setEditingBudgetGoal(null);
                   setShowBudgetForm(true);
                 }}
+              />
+
+              <QuickActionCard
+                title="Distributions"
+                description="Manage benefit distributions"
+                icon={Package}
+                color="indigo"
+                onClick={() => navigate('/distributions')}
               />
             </div>
           </Card>
@@ -797,7 +873,7 @@ const QuickActionCard = ({
   const colorClasses = {
     blue: "text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20",
     green: "text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20",
-
+    indigo: "text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20",
   };
 
   return (

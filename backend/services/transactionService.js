@@ -173,6 +173,54 @@ const createTransaction = async (organizationId, userId, data) => {
     }
 
     await invalidateUserCache(organizationId);
+
+    // Auto-enroll in any active distribution campaigns for this organization
+    if (savedTransaction.type === 'contribution') {
+      try {
+        const DistributionCampaign = require('../models/distributionCampaign.model');
+        const DistributionRecord = require('../models/distributionRecord.model');
+        const activeCampaigns = await DistributionCampaign.find({
+          organizationId,
+          status: 'ACTIVE'
+        });
+
+        for (const camp of activeCampaigns) {
+          if (camp.eligibility?.minAmount > 0 && savedTransaction.amount < camp.eligibility.minAmount) continue;
+          if (camp.eligibility?.category && savedTransaction.category !== camp.eligibility.category) continue;
+
+          const name = (savedTransaction.contributor?.name && savedTransaction.contributor.name.trim()) 
+            || (savedTransaction.description && savedTransaction.description.trim()) 
+            || 'Anonymous Contributor';
+
+          let meta = {};
+          if (savedTransaction.contributor?.metadata) {
+            meta = savedTransaction.contributor.metadata instanceof Map
+              ? Object.fromEntries(savedTransaction.contributor.metadata)
+              : savedTransaction.contributor.metadata;
+          }
+
+          await DistributionRecord.updateOne(
+            { campaignId: camp._id, contributionId: savedTransaction._id },
+            {
+              $setOnInsert: {
+                organizationId,
+                campaignId: camp._id,
+                contributionId: savedTransaction._id,
+                contributor: {
+                  name,
+                  metadata: meta
+                },
+                status: 'PENDING'
+              }
+            },
+            { upsert: true }
+          );
+        }
+      } catch (distErr) {
+        console.error('Error auto-enrolling in active distribution campaigns:', distErr);
+      }
+    }
+
     return savedTransaction;
   });
 };

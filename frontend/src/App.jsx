@@ -13,6 +13,7 @@ import SettingsPage from './pages/SettingsPage';
 import TransactionsPage from './pages/TransactionsPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import BudgetPage from './pages/BudgetPage';
+import DistributionsPage from './pages/DistributionsPage';
 import PublicDashboard from './pages/PublicDashboard';
 
 import { AnimatePresence } from 'framer-motion';
@@ -28,6 +29,7 @@ function App() {
             <Route path="/transactions" element={<ProtectedRoute><TransactionsPage /></ProtectedRoute>} />
             <Route path="/analytics" element={<ProtectedRoute><AnalyticsPage /></ProtectedRoute>} />
             <Route path="/budget" element={<ProtectedRoute><BudgetPage /></ProtectedRoute>} />
+            <Route path="/distributions" element={<ProtectedRoute><DistributionsPage /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
             <Route path="/login" element={<LoginPage />} />

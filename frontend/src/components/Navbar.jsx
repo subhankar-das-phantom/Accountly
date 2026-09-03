@@ -14,6 +14,7 @@ import {
   LogIn,
   PieChart,
   PiggyBank,
+  Package,
   Settings
 } from 'lucide-react';
 import Button from './common/Button';
@@ -87,6 +88,12 @@ const Navbar = () => {
                   icon={PiggyBank} 
                   label="Budget" 
                   isActive={isActiveLink('/budget')}
+                />
+                <NavItem 
+                  to="/distributions" 
+                  icon={Package} 
+                  label="Distributions" 
+                  isActive={isActiveLink('/distributions')}
                 />
                 <NavItem 
                   to="/settings" 
@@ -188,6 +195,12 @@ const Navbar = () => {
                     to="/budget" 
                     icon={PiggyBank} 
                     label="Budget" 
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  />
+                  <MobileNavItem 
+                    to="/distributions" 
+                    icon={Package} 
+                    label="Distributions" 
                     onClick={() => setIsMobileMenuOpen(false)}
                   />
                   <MobileNavItem 

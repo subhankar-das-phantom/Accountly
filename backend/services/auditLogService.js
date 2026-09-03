@@ -6,7 +6,9 @@ const ALLOWED_FIELDS = {
   FinancialRecord: ['type', 'category', 'amount', 'date', 'description', 'contributor', 'recipient', 'status'],
   Organization: ['name', 'description', 'currency', 'settings'],
   ContributorField: ['key', 'label', 'type', 'options', 'required', 'publicVisibility', 'order'],
-  Budget: ['category', 'amount', 'month', 'year']
+  Budget: ['category', 'amount', 'month', 'year'],
+  DistributionCampaign: ['name', 'description', 'itemName', 'eligibility', 'status', 'completedAt'],
+  DistributionRecord: ['campaignId', 'contributionId', 'contributor', 'status', 'distributedAt', 'distributedBy', 'notes']
 };
 
 const redactData = (entityType, data) => {

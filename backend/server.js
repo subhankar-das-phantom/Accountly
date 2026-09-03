@@ -94,7 +94,7 @@ const analyticsRouter = require('./routes/analytics.routes');
 const reportRouter = require('./routes/report.routes');
 const budgetRouter = require('./routes/budget.routes');
 const publicRouter = require('./routes/public.routes');
-
+const distributionRouter = require('./routes/distribution.routes');
 
 app.use('/api/users', authRouter);
 app.use('/api/organizations', organizationRouter);
@@ -103,6 +103,7 @@ app.use('/api/analytics', analyticsRouter);
 app.use('/api/transactions', transactionRouter);
 app.use('/api/budget', budgetRouter);
 app.use('/api/public', publicRouter);
+app.use('/api/distributions', distributionRouter);
 // Health route (keep outside /api so limiter skip works)
 app.get('/health', (req, res) => {
   res.status(200).json({

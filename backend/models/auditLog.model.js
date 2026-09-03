@@ -10,7 +10,12 @@ const ActionEnum = [
   'CONTRIBUTOR_FIELD_DELETE',
   'MEMBER_ADDED',
   'MEMBER_ROLE_UPDATED',
-  'MEMBER_REMOVED'
+  'MEMBER_REMOVED',
+  'DISTRIBUTION_CAMPAIGN_CREATE',
+  'DISTRIBUTION_CAMPAIGN_UPDATE',
+  'DISTRIBUTION_CAMPAIGN_DELETE',
+  'DISTRIBUTION_MARKED',
+  'DISTRIBUTION_UNDO'
 ];
 
 const EntityTypeEnum = [
@@ -18,7 +23,9 @@ const EntityTypeEnum = [
   'Organization',
   'ContributorField',
   'Budget',
-  'OrganizationMember'
+  'OrganizationMember',
+  'DistributionCampaign',
+  'DistributionRecord'
 ];
 
 const auditLogSchema = new mongoose.Schema({
