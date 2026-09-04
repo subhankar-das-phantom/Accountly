@@ -3,8 +3,8 @@ const OrganizationMember = require('../models/organizationMember.model');
 
 const resolveOrganization = async (req, res, next) => {
   try {
-    // Check if client explicitly sent an organization ID (for future multi-org support)
-    const orgId = req.header('X-Organization-Id');
+    // Check if client explicitly sent an organization ID (via header or query for SSE)
+    const orgId = req.header('X-Organization-Id') || (req.query && req.query.orgId);
 
     let membership;
     

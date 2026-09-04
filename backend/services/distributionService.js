@@ -6,6 +6,8 @@ const Transaction = require('../models/transaction.model');
 const Organization = require('../models/organization.model');
 const User = require('../models/user.model');
 const auditLogService = require('./auditLogService');
+const distributionEventHub = require('./distributionEventHub');
+const { invalidateUserCache } = require('../utils/cache');
 
 // Helper to escape regex search query safely
 const escapeRegex = (str) => {
@@ -643,6 +645,24 @@ const getRecords = async (organizationId, campaignId, queryParams = {}) => {
 };
 
 /**
+ * Computes authoritative aggregate campaign statistics
+ */
+const getCampaignStats = async (campaignId) => {
+  const [eligibleCount, distributedCount] = await Promise.all([
+    DistributionRecord.countDocuments({ campaignId, status: { $ne: 'CANCELLED' } }),
+    DistributionRecord.countDocuments({ campaignId, status: 'DISTRIBUTED' })
+  ]);
+  const remainingCount = Math.max(0, eligibleCount - distributedCount);
+  const progressPercentage = eligibleCount > 0 ? Number(((distributedCount / eligibleCount) * 100).toFixed(1)) : 0;
+  return {
+    eligibleCount,
+    distributedCount,
+    remainingCount,
+    progressPercentage
+  };
+};
+
+/**
  * Mark a pending distribution record as DISTRIBUTED.
  * Implements strict atomic concurrency protection.
  */
@@ -722,6 +742,29 @@ const distributeRecord = async (organizationId, campaignId, recordId, actorId, n
     }
   });
 
+  // Calculate authoritative live campaign stats after mutation
+  const stats = await getCampaignStats(campaignId);
+
+  // Invalidate relevant server-side caches
+  invalidateUserCache(organizationId).catch(err => {
+    console.error('Failed to invalidate organization cache after distribution:', err);
+  });
+
+  // Broadcast real-time distribution event to all connected admin devices in this campaign
+  distributionEventHub.publish(organizationId, campaignId, {
+    type: 'DISTRIBUTION_UPDATED',
+    organizationId: organizationId.toString(),
+    campaignId: campaignId.toString(),
+    recordId: updated._id.toString(),
+    status: 'DISTRIBUTED',
+    distributedAt: updated.distributedAt,
+    distributedBy: updated.distributedBy ? { _id: updated.distributedBy._id, username: updated.distributedBy.username } : null,
+    notes: updated.notes,
+    stats,
+    timestamp: new Date().toISOString(),
+    version: Date.now()
+  });
+
   return {
     _id: updated._id,
     campaignId: updated.campaignId,
@@ -735,50 +778,62 @@ const distributeRecord = async (organizationId, campaignId, recordId, actorId, n
     status: updated.status,
     distributedAt: updated.distributedAt,
     distributedBy: updated.distributedBy ? { _id: updated.distributedBy._id, username: updated.distributedBy.username } : null,
-    notes: updated.notes
+    notes: updated.notes,
+    stats
   };
 };
 
 /**
  * Undo distribution of a record, returning it to PENDING.
  * Requires OWNER or ADMIN role.
+ * Implements strict atomic concurrency protection.
  */
 const undoDistribution = async (organizationId, campaignId, recordId, actorId, reason) => {
-  const existing = await DistributionRecord.findOne({
-    _id: recordId,
-    organizationId,
-    campaignId
-  }).populate('distributedBy', 'username');
+  const undoNotes = reason ? (reason.trim() ? `Undo: ${reason.trim()}` : '') : '';
 
-  if (!existing) {
-    const error = new Error('Distribution record not found');
-    error.status = 404;
-    throw error;
-  }
+  // ATOMIC OPERATION: findOneAndUpdate with status === 'DISTRIBUTED'
+  // Guarantees only a distributed record can be undone, preventing concurrent undo collisions
+  const updated = await DistributionRecord.findOneAndUpdate(
+    {
+      _id: recordId,
+      organizationId,
+      campaignId,
+      status: 'DISTRIBUTED'
+    },
+    {
+      $set: {
+        status: 'PENDING',
+        distributedAt: null,
+        distributedBy: null,
+        notes: undoNotes
+      }
+    },
+    { new: true }
+  ).populate('contributionId', 'amount category date');
 
-  if (existing.status !== 'DISTRIBUTED') {
-    const error = new Error('Only distributed records can be undone.');
+  if (!updated) {
+    const existing = await DistributionRecord.findOne({
+      _id: recordId,
+      organizationId,
+      campaignId
+    });
+
+    if (!existing) {
+      const error = new Error('Distribution record not found');
+      error.status = 404;
+      throw error;
+    }
+
+    if (existing.status !== 'DISTRIBUTED') {
+      const error = new Error('Only distributed records can be undone.');
+      error.status = 400;
+      throw error;
+    }
+
+    const error = new Error('Record cannot be undone in its current state.');
     error.status = 400;
     throw error;
   }
-
-  const previousData = {
-    status: 'DISTRIBUTED',
-    distributedAt: existing.distributedAt,
-    distributedBy: existing.distributedBy ? existing.distributedBy._id : null,
-    notes: existing.notes
-  };
-
-  existing.status = 'PENDING';
-  existing.distributedAt = null;
-  existing.distributedBy = null;
-  if (reason) {
-    existing.notes = existing.notes 
-      ? `${existing.notes} | Undo: ${reason}` 
-      : `Undo: ${reason}`;
-  }
-
-  await existing.save();
 
   // Audit log undo
   await auditLogService.createAuditLog({
@@ -786,35 +841,59 @@ const undoDistribution = async (organizationId, campaignId, recordId, actorId, r
     actorId,
     action: 'DISTRIBUTION_UNDO',
     entityType: 'DistributionRecord',
-    entityId: existing._id,
-    previousData,
+    entityId: updated._id,
+    previousData: { status: 'DISTRIBUTED' },
     newData: {
       status: 'PENDING',
       distributedAt: null,
       distributedBy: null,
-      notes: existing.notes
+      notes: updated.notes
     },
     metadata: {
       campaignId,
-      contributorName: existing.contributor?.name,
+      contributorName: updated.contributor?.name,
       reason: reason || 'Admin correction'
     }
   });
 
-  return {
-    _id: existing._id,
-    campaignId: existing.campaignId,
-    contributionId: existing.contributionId,
-    contributor: {
-      name: existing.contributor?.name,
-      metadata: existing.contributor?.metadata instanceof Map
-        ? Object.fromEntries(existing.contributor.metadata)
-        : existing.contributor?.metadata
-    },
-    status: existing.status,
+  // Calculate authoritative live campaign stats after undo
+  const stats = await getCampaignStats(campaignId);
+
+  // Invalidate relevant server-side caches
+  invalidateUserCache(organizationId).catch(err => {
+    console.error('Failed to invalidate organization cache after undo:', err);
+  });
+
+  // Broadcast real-time undo event to all connected admin devices in this campaign
+  distributionEventHub.publish(organizationId, campaignId, {
+    type: 'DISTRIBUTION_UPDATED',
+    organizationId: organizationId.toString(),
+    campaignId: campaignId.toString(),
+    recordId: updated._id.toString(),
+    status: 'PENDING',
     distributedAt: null,
     distributedBy: null,
-    notes: existing.notes
+    notes: updated.notes,
+    stats,
+    timestamp: new Date().toISOString(),
+    version: Date.now()
+  });
+
+  return {
+    _id: updated._id,
+    campaignId: updated.campaignId,
+    contributionId: updated.contributionId,
+    contributor: {
+      name: updated.contributor?.name,
+      metadata: updated.contributor?.metadata instanceof Map
+        ? Object.fromEntries(updated.contributor.metadata)
+        : updated.contributor?.metadata
+    },
+    status: updated.status,
+    distributedAt: null,
+    distributedBy: null,
+    notes: updated.notes,
+    stats
   };
 };
 

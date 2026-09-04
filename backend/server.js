@@ -153,11 +153,13 @@ const errorHandler = require('./middleware/errorHandler');
 // Global error handler (keep last)
 app.use(errorHandler);
 
-// Start server
-app.listen(port, () => {
-  console.log(`Server is running on port: ${port}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`Health check available at: http://localhost:${port}/health`);
-});
+// Start server only when run directly
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`Server is running on port: ${port}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`Health check available at: http://localhost:${port}/health`);
+  });
+}
 
 module.exports = app;

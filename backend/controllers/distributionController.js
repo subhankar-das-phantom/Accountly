@@ -141,6 +141,47 @@ const exportCampaignExcel = async (req, res, next) => {
   }
 };
 
+const subscribeDistributionEvents = async (req, res, next) => {
+  try {
+    const campaignId = req.params.id;
+    const organizationId = req.organizationId;
+
+    // Verify campaign belongs to the organization
+    await distributionService.getCampaignById(organizationId, campaignId);
+
+    // Set Server-Sent Events headers
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no'
+    });
+
+    const clientId = `${req.user}_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+
+    // Acknowledge connection
+    res.write(`data: ${JSON.stringify({ type: 'CONNECTED', clientId, campaignId })}\n\n`);
+    if (typeof res.flush === 'function') res.flush();
+
+    const distributionEventHub = require('../services/distributionEventHub');
+    const client = {
+      id: clientId,
+      res,
+      userId: req.user,
+      organizationId,
+      campaignId
+    };
+
+    distributionEventHub.subscribe(organizationId, campaignId, client);
+
+    req.on('close', () => {
+      distributionEventHub.unsubscribe(organizationId, campaignId, clientId);
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   createCampaign,
   getCampaigns,
@@ -151,5 +192,6 @@ module.exports = {
   getRecords,
   distributeRecord,
   undoDistribution,
-  exportCampaignExcel
+  exportCampaignExcel,
+  subscribeDistributionEvents
 };

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, useRef, useCallback } from 'react';
 import useSWRInfinite from 'swr/infinite';
 import { useInView } from 'react-intersection-observer';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { 
   Package, 
   Plus, 
@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { useApi } from '../hooks/useApi';
+import useDistributionSync from '../hooks/useDistributionSync';
 import api from '../services/api';
 import distributionService from '../services/distributionService';
 import Button from '../components/common/Button';
@@ -161,6 +162,127 @@ const DistributionsPage = () => {
     }
   }, [inView, isReachingEnd, isValidating, setSize]);
 
+  // ========================================================
+  // REAL-TIME SURGICAL DISTRIBUTION SYNCHRONIZATION
+  // ========================================================
+  const handleRealtimeDistributionUpdate = useCallback((event) => {
+    if (!event || event.campaignId !== selectedCampaignId) return;
+
+    // 1. Authoritative campaign counters update in place (zero flicker, no skeleton loaders)
+    if (event.stats) {
+      setSelectedCampaign(prev => (prev && prev._id === event.campaignId ? { ...prev, stats: event.stats } : prev));
+      setCampaigns(prevList =>
+        prevList.map(c => (c._id === event.campaignId ? { ...c, stats: event.stats } : c))
+      );
+    }
+
+    // 2. Surgical SWR record update in memory without page reload or remount
+    mutateRecords(
+      prevPages => {
+        if (!prevPages) return prevPages;
+
+        return prevPages.map(page => {
+          if (!page || !page.records) return page;
+          const recordExists = page.records.some(r => r._id === event.recordId);
+          if (!recordExists) return page;
+
+          let updatedRecords = page.records;
+          let updatedPagination = page.pagination ? { ...page.pagination } : undefined;
+
+          if (statusFilter === 'ALL') {
+            // ALL filter: update in place
+            updatedRecords = page.records.map(r =>
+              r._id === event.recordId
+                ? {
+                    ...r,
+                    status: event.status,
+                    distributedAt: event.distributedAt,
+                    distributedBy: event.distributedBy,
+                    notes: event.notes !== undefined ? event.notes : r.notes
+                  }
+                : r
+            );
+          } else if (statusFilter === 'PENDING') {
+            if (event.status === 'DISTRIBUTED') {
+              // Smoothly transition out of PENDING view
+              updatedRecords = page.records.filter(r => r._id !== event.recordId);
+              if (updatedPagination && updatedPagination.totalCount > 0) {
+                updatedPagination.totalCount -= 1;
+              }
+            } else if (event.status === 'PENDING') {
+              // Undo: update record in place
+              updatedRecords = page.records.map(r =>
+                r._id === event.recordId
+                  ? {
+                      ...r,
+                      status: 'PENDING',
+                      distributedAt: null,
+                      distributedBy: null,
+                      notes: event.notes !== undefined ? event.notes : r.notes
+                    }
+                  : r
+              );
+            }
+          } else if (statusFilter === 'DISTRIBUTED') {
+            if (event.status === 'PENDING') {
+              // Undo: smoothly transition out of DISTRIBUTED view
+              updatedRecords = page.records.filter(r => r._id !== event.recordId);
+              if (updatedPagination && updatedPagination.totalCount > 0) {
+                updatedPagination.totalCount -= 1;
+              }
+            } else if (event.status === 'DISTRIBUTED') {
+              // Distributed: update in place
+              updatedRecords = page.records.map(r =>
+                r._id === event.recordId
+                  ? {
+                      ...r,
+                      status: 'DISTRIBUTED',
+                      distributedAt: event.distributedAt,
+                      distributedBy: event.distributedBy,
+                      notes: event.notes !== undefined ? event.notes : r.notes
+                    }
+                  : r
+              );
+            }
+          }
+
+          return {
+            ...page,
+            records: updatedRecords,
+            pagination: updatedPagination
+          };
+        });
+      },
+      false // false guarantees NO network refetch, in-memory surgical update, zero flicker!
+    );
+  }, [selectedCampaignId, statusFilter, mutateRecords]);
+
+  const handleReconnectRevalidation = useCallback(() => {
+    if (!selectedCampaignId) return;
+
+    // Silent background revalidation
+    mutateRecords();
+
+    // Silently fetch fresh authoritative stats
+    distributionService.getCampaignById(selectedCampaignId).then(fresh => {
+      if (fresh) {
+        setSelectedCampaign(prev => (prev && prev._id === fresh._id ? fresh : prev));
+        setCampaigns(prevList => prevList.map(c => (c._id === fresh._id ? fresh : c)));
+      }
+    }).catch(err => {
+      console.warn('[RealtimeSync] Silent revalidation error:', err);
+    });
+  }, [selectedCampaignId, mutateRecords]);
+
+  // Hook into real-time multi-device sync
+  const { connectionStatus } = useDistributionSync({
+    campaignId: selectedCampaignId,
+    orgId: activeOrg?._id,
+    token,
+    onEvent: handleRealtimeDistributionUpdate,
+    onReconnect: handleReconnectRevalidation
+  });
+
   // Focus search with '/' shortcut
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -291,21 +413,26 @@ const DistributionsPage = () => {
         false
       );
 
-      // Update live campaign stats
-      setSelectedCampaign(prev => {
-        if (!prev) return prev;
-        const newDist = (prev.stats?.distributedCount || 0) + 1;
-        const eligible = prev.stats?.eligibleCount || 0;
-        return {
-          ...prev,
-          stats: {
-            ...prev.stats,
-            distributedCount: newDist,
-            remainingCount: Math.max(0, eligible - newDist),
-            progressPercentage: eligible > 0 ? Number(((newDist / eligible) * 100).toFixed(1)) : 0
-          }
-        };
-      });
+      // Update live campaign stats authoritatively
+      if (updated.stats) {
+        setSelectedCampaign(prev => (prev ? { ...prev, stats: updated.stats } : prev));
+        setCampaigns(prevList => prevList.map(c => (c._id === campaignId ? { ...c, stats: updated.stats } : c)));
+      } else {
+        setSelectedCampaign(prev => {
+          if (!prev) return prev;
+          const newDist = (prev.stats?.distributedCount || 0) + 1;
+          const eligible = prev.stats?.eligibleCount || 0;
+          return {
+            ...prev,
+            stats: {
+              ...prev.stats,
+              distributedCount: newDist,
+              remainingCount: Math.max(0, eligible - newDist),
+              progressPercentage: eligible > 0 ? Number(((newDist / eligible) * 100).toFixed(1)) : 0
+            }
+          };
+        });
+      }
 
       showToast(`Item distributed to ${record.contributor?.name}!`, 'success');
     } catch (err) {
@@ -364,20 +491,26 @@ const DistributionsPage = () => {
         false
       );
 
-      setSelectedCampaign(prev => {
-        if (!prev) return prev;
-        const newDist = Math.max(0, (prev.stats?.distributedCount || 0) - 1);
-        const eligible = prev.stats?.eligibleCount || 0;
-        return {
-          ...prev,
-          stats: {
-            ...prev.stats,
-            distributedCount: newDist,
-            remainingCount: Math.max(0, eligible - newDist),
-            progressPercentage: eligible > 0 ? Number(((newDist / eligible) * 100).toFixed(1)) : 0
-          }
-        };
-      });
+      // Update live campaign stats authoritatively
+      if (updated.stats) {
+        setSelectedCampaign(prev => (prev ? { ...prev, stats: updated.stats } : prev));
+        setCampaigns(prevList => prevList.map(c => (c._id === campaignId ? { ...c, stats: updated.stats } : c)));
+      } else {
+        setSelectedCampaign(prev => {
+          if (!prev) return prev;
+          const newDist = Math.max(0, (prev.stats?.distributedCount || 0) - 1);
+          const eligible = prev.stats?.eligibleCount || 0;
+          return {
+            ...prev,
+            stats: {
+              ...prev.stats,
+              distributedCount: newDist,
+              remainingCount: Math.max(0, eligible - newDist),
+              progressPercentage: eligible > 0 ? Number(((newDist / eligible) * 100).toFixed(1)) : 0
+            }
+          };
+        });
+      }
 
       showToast(`Distribution undone for ${undoModalRecord.contributor?.name}`);
       setUndoModalRecord(null);
@@ -656,8 +789,24 @@ const DistributionsPage = () => {
                 </div>
               </div>
 
-              {/* Action Buttons */}
+              {/* Action Buttons & Real-Time Sync Status */}
               <div className="flex items-center gap-2">
+                <div 
+                  title={connectionStatus === 'CONNECTED' ? 'Real-time multi-device synchronization active' : 'Reconnecting to real-time sync stream...'}
+                  className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-xs"
+                >
+                  <span className={`w-2 h-2 rounded-full ${
+                    connectionStatus === 'CONNECTED'
+                      ? 'bg-emerald-500 animate-pulse'
+                      : connectionStatus === 'RECONNECTING'
+                      ? 'bg-amber-500 animate-pulse'
+                      : 'bg-gray-400'
+                  }`} />
+                  <span className="text-gray-600 dark:text-gray-300 text-[11px] sm:text-xs font-medium">
+                    {connectionStatus === 'CONNECTED' ? 'Live Sync' : connectionStatus === 'RECONNECTING' ? 'Reconnecting...' : 'Sync Offline'}
+                  </span>
+                </div>
+
                 <Button
                   variant="secondary"
                   size="sm"

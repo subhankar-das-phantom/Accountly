@@ -16,6 +16,9 @@ router.get('/campaigns/:id/export/excel', distributionController.exportCampaignE
 // Distribution Records (Read / Search)
 router.get('/campaigns/:id/records', distributionController.getRecords);
 
+// Real-Time Distribution Event Stream (SSE)
+router.get('/campaigns/:id/events', distributionController.subscribeDistributionEvents);
+
 // Mutating operations require ACTIVE organization status
 router.use(requireActive);
 
