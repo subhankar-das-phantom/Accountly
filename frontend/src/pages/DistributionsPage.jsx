@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, useRef, useCallback } from 'react';
 import useSWRInfinite from 'swr/infinite';
 import { useInView } from 'react-intersection-observer';
-import { AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Package, 
   Plus, 
