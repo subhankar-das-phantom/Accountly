@@ -31,6 +31,16 @@ const distributionRecordSchema = new Schema({
       default: {} 
     }
   },
+  item: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  quantity: {
+    type: Number,
+    default: 1,
+    min: 1
+  },
   status: {
     type: String,
     enum: ['PENDING', 'DISTRIBUTED', 'CANCELLED'],
@@ -45,6 +55,20 @@ const distributionRecordSchema = new Schema({
     type: Schema.Types.ObjectId,
     ref: 'User',
     default: null
+  },
+  reversedAt: {
+    type: Date,
+    default: null
+  },
+  reversedBy: {
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
+  reversalReason: {
+    type: String,
+    trim: true,
+    default: ''
   },
   notes: {
     type: String,
@@ -62,6 +86,8 @@ distributionRecordSchema.index({ campaignId: 1, contributionId: 1 }, { unique: t
 distributionRecordSchema.index({ organizationId: 1, campaignId: 1, status: 1 });
 distributionRecordSchema.index({ organizationId: 1, campaignId: 1, 'contributor.name': 1 });
 distributionRecordSchema.index({ organizationId: 1, campaignId: 1, 'contributor.name': 1, status: 1 });
+distributionRecordSchema.index({ organizationId: 1, campaignId: 1, distributedBy: 1 });
+distributionRecordSchema.index({ organizationId: 1, distributedAt: -1 });
 
 const DistributionRecord = mongoose.model('DistributionRecord', distributionRecordSchema);
 

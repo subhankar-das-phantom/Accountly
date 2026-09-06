@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { motion } from 'framer-motion';
-import { Globe, Settings as SettingsIcon, Plus, Trash2, Edit2, Loader2, Save, X, Users, Info } from 'lucide-react';
+import { Globe, Settings as SettingsIcon, Plus, Trash2, Edit2, Loader2, Save, X, Users, Info, Package, ShieldCheck, UserCheck, RefreshCw, Eye, EyeOff, Copy, Check, Key } from 'lucide-react';
 import api from '../services/api';
+import distributionService from '../services/distributionService';
 import Button from '../components/common/Button';
 import Card from '../components/common/Card';
+import Badge from '../components/common/Badge';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { IntegrityCheck, AuditLogs } from '../components/AuditLogs';
@@ -196,6 +198,9 @@ const SettingsPage = () => {
 
         {/* Members & Access */}
         <OrganizationMembers organization={organization} />
+
+        {/* Distribution Operators */}
+        <DistributionOperatorsManager organization={organization} />
 
         {/* Audit & Integrity */}
         <div className="pt-8 border-t border-gray-200 dark:border-gray-800">
@@ -444,6 +449,7 @@ const OrganizationMembers = ({ organization }) => {
               <select value={role} onChange={e => setRole(e.target.value)} className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
                 <option value="ADMIN">ADMIN (Manage financials & reports)</option>
                 <option value="OWNER">OWNER (Full control including deletion)</option>
+                <option value="DISTRIBUTION_OPERATOR">DISTRIBUTION OPERATOR (Counter mode only)</option>
               </select>
             </div>
           </div>
@@ -473,7 +479,13 @@ const OrganizationMembers = ({ organization }) => {
                 </td>
                 <td className="px-4 py-3">{member.userId?.email}</td>
                 <td className="px-4 py-3">
-                  <span className={`px-2 py-1 text-xs rounded-full ${member.role === 'OWNER' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'}`}>
+                  <span className={`px-2 py-1 text-xs rounded-full ${
+                    member.role === 'OWNER' 
+                      ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' 
+                      : member.role === 'DISTRIBUTION_OPERATOR'
+                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
+                      : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                  }`}>
                     {member.role}
                   </span>
                 </td>
@@ -489,6 +501,329 @@ const OrganizationMembers = ({ organization }) => {
           </tbody>
         </table>
       </div>
+    </Card>
+  );
+};
+
+const DistributionOperatorsManager = ({ organization }) => {
+  const [operators, setOperators] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [formData, setFormData] = useState({
+    username: '',
+    email: '',
+    password: ''
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [handoverData, setHandoverData] = useState(null);
+  const [copied, setCopied] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [togglingId, setTogglingId] = useState(null);
+  const { user } = useContext(AuthContext);
+
+  const generatePassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$';
+    let pass = 'Op@';
+    for (let i = 0; i < 5; i++) {
+      pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setFormData(prev => ({ ...prev, password: pass }));
+  };
+
+  const fetchOperators = async () => {
+    try {
+      setLoading(true);
+      const data = await distributionService.getDistributionOperators();
+      setOperators(data);
+    } catch (err) {
+      console.error('Failed to fetch distribution operators:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOperators();
+  }, [organization]);
+
+  const handleAddOperator = async (e) => {
+    e.preventDefault();
+    if (!formData.email.trim()) return;
+    try {
+      setSaving(true);
+      await distributionService.addDistributionOperator({
+        email: formData.email.trim(),
+        username: formData.username.trim() || undefined,
+        password: formData.password || undefined
+      });
+
+      if (formData.password) {
+        setHandoverData({
+          username: formData.username.trim() || formData.email.split('@')[0],
+          email: formData.email.trim(),
+          password: formData.password
+        });
+      }
+
+      setFormData({ username: '', email: '', password: '' });
+      setShowAdd(false);
+      fetchOperators();
+    } catch (err) {
+      alert(err.response?.data?.message || err.response?.data?.error || 'Failed to add operator.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const copyHandoverText = () => {
+    if (!handoverData) return;
+    const text = `Accountly Counter Login Credentials:\nEmail: ${handoverData.email}\nPassword: ${handoverData.password}\nLogin at: ${window.location.origin}/#/login`;
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
+  const handleToggleStatus = async (op) => {
+    const memberId = op.memberId || op._id;
+    const newStatus = op.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    const action = newStatus === 'INACTIVE' ? 'deactivate' : 'reactivate';
+    if (!window.confirm(`Are you sure you want to ${action} ${op.username || op.user?.username || 'this operator'}?`)) return;
+
+    try {
+      setTogglingId(memberId);
+      await distributionService.setOperatorStatus(memberId, newStatus);
+      fetchOperators();
+    } catch (err) {
+      alert(err.response?.data?.message || `Failed to ${action} operator.`);
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  return (
+    <Card className="p-6">
+      {/* Handover Credentials Modal */}
+      {handoverData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center space-x-3 text-emerald-600 mb-3">
+              <div className="p-2.5 bg-emerald-50 dark:bg-emerald-900/30 rounded-xl">
+                <Key className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                  Operator Account Ready 🎉
+                </h3>
+                <p className="text-xs text-gray-500">Hand these credentials over to your volunteer.</p>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 dark:bg-gray-700/60 p-4 rounded-xl border border-gray-200 dark:border-gray-600 space-y-2 mb-4 text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500">Name / Handle:</span>
+                <span className="font-semibold text-gray-900 dark:text-white">{handoverData.username}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500">Login Email:</span>
+                <span className="font-mono font-bold text-blue-600 dark:text-blue-400">{handoverData.email}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500">Password:</span>
+                <span className="font-mono font-bold text-gray-900 dark:text-white bg-white dark:bg-gray-800 px-2 py-0.5 rounded border border-gray-200 dark:border-gray-700">
+                  {handoverData.password}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-500 mb-5">
+              When the operator signs in at the regular login screen, they will automatically land in Counter Mode with zero access to financial or setting pages.
+            </p>
+
+            <div className="flex justify-between items-center gap-3">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={copyHandoverText}
+                icon={copied ? Check : Copy}
+              >
+                {copied ? 'Copied to Clipboard!' : 'Copy Credentials'}
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setHandoverData(null)}
+              >
+                Done
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center">
+          <Package className="h-6 w-6 mr-2 text-blue-600" />
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Distribution Operators</h2>
+            <p className="text-sm text-gray-500">
+              Create and manage counter operator accounts. Provision login credentials to hand over to staff or volunteers.
+            </p>
+          </div>
+        </div>
+        <Button onClick={() => setShowAdd(!showAdd)} variant={showAdd ? 'secondary' : 'primary'} size="sm">
+          {showAdd ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4 mr-2" />}
+          {showAdd ? 'Cancel' : 'Add Operator'}
+        </Button>
+      </div>
+
+      {showAdd && (
+        <form onSubmit={handleAddOperator} className="mb-8 p-4 sm:p-5 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-1">
+                Operator Name / Handle
+              </label>
+              <input 
+                type="text" 
+                value={formData.username} 
+                onChange={e => setFormData({ ...formData, username: e.target.value })} 
+                placeholder="e.g. Rahul (Counter 1)" 
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" 
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-1">
+                Operator Email <span className="text-rose-500">*</span>
+              </label>
+              <input 
+                required 
+                type="email" 
+                value={formData.email} 
+                onChange={e => setFormData({ ...formData, email: e.target.value })} 
+                placeholder="counter1@accountly.org" 
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" 
+              />
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300">
+                Password to Hand Over
+              </label>
+              <button
+                type="button"
+                onClick={generatePassword}
+                className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium"
+              >
+                Auto-generate Password
+              </button>
+            </div>
+            <div className="relative">
+              <input 
+                type={showPassword ? 'text' : 'password'} 
+                value={formData.password} 
+                onChange={e => setFormData({ ...formData, password: e.target.value })} 
+                placeholder="Create password (min 6 characters) to handover" 
+                className="w-full pl-3 pr-10 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" 
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              If the user already has an Accountly account, leave password blank to add them directly. If creating a new account, set a password to handover.
+            </p>
+          </div>
+
+          <div className="flex justify-end space-x-3 pt-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              type="button"
+              onClick={() => setShowAdd(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" size="sm" disabled={saving}>
+              {saving ? 'Creating Account...' : 'Create & Handover Operator'}
+            </Button>
+          </div>
+        </form>
+      )}
+
+      {loading ? (
+        <div className="text-center py-6 text-gray-500 text-sm">
+          <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-blue-500" />
+          Loading operators...
+        </div>
+      ) : operators.length === 0 ? (
+        <div className="text-center py-8 text-gray-500 text-sm">
+          No distribution operators configured yet. Add your counter staff using their registered email.
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400">
+            <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-800 dark:text-gray-400">
+              <tr>
+                <th className="px-4 py-3 rounded-tl-lg">Operator</th>
+                <th className="px-4 py-3">Email</th>
+                <th className="px-4 py-3 text-center">Distributions</th>
+                <th className="px-4 py-3">Last Active</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3 text-right rounded-tr-lg">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {operators.map(op => {
+                const opId = op.memberId || op._id;
+                const isActive = op.status === 'ACTIVE';
+                const isBusy = togglingId === opId;
+                return (
+                  <tr key={opId} className="border-b dark:border-gray-700 last:border-0 hover:bg-gray-50/50 dark:hover:bg-gray-800/50">
+                    <td className="px-4 py-3 font-medium text-gray-900 dark:text-white whitespace-nowrap">
+                      <div className="flex items-center space-x-2.5">
+                        <div className="w-7 h-7 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center">
+                          {op.username ? op.username.charAt(0).toUpperCase() : 'O'}
+                        </div>
+                        <span>{op.username || 'Operator'}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-xs whitespace-nowrap">{op.email}</td>
+                    <td className="px-4 py-3 text-center font-semibold text-gray-900 dark:text-white whitespace-nowrap">
+                      {op.totalDistributions || 0}
+                    </td>
+                    <td className="px-4 py-3 text-xs whitespace-nowrap">
+                      {op.lastActive ? new Date(op.lastActive).toLocaleDateString() : 'Never'}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <Badge variant={isActive ? 'success' : 'danger'}>
+                        {op.status}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      <Button
+                        variant={isActive ? 'danger' : 'secondary'}
+                        size="sm"
+                        disabled={isBusy}
+                        onClick={() => handleToggleStatus(op)}
+                        className="text-xs"
+                      >
+                        {isBusy ? 'Updating...' : isActive ? 'Deactivate' : 'Reactivate'}
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </Card>
   );
 };

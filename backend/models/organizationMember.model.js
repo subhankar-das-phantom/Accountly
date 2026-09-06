@@ -16,7 +16,7 @@ const organizationMemberSchema = new Schema({
   },
   role: {
     type: String,
-    enum: ['OWNER', 'ADMIN'],
+    enum: ['OWNER', 'ADMIN', 'DISTRIBUTION_OPERATOR'],
     required: true
   },
   status: {

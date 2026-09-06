@@ -66,6 +66,59 @@ export const distributionService = {
     link.click();
     link.parentNode.removeChild(link);
     window.URL.revokeObjectURL(url);
+  },
+
+  // Administrative Analytics & Activity Endpoints
+  getAnalyticsSummary: async (campaignId = 'ALL') => {
+    const res = await api.get('distributions/analytics/summary', {
+      params: { campaignId }
+    });
+    return res.data;
+  },
+
+  getDistributionByOperator: async (campaignId = 'ALL') => {
+    const res = await api.get('distributions/analytics/operators', {
+      params: { campaignId }
+    });
+    return res.data;
+  },
+
+  getOperatorHistory: async (operatorId, params = {}) => {
+    const res = await api.get(`distributions/analytics/operators/${operatorId}/history`, {
+      params
+    });
+    return res.data;
+  },
+
+  getDistributionActivity: async (params = {}) => {
+    const res = await api.get('distributions/analytics/activity', {
+      params
+    });
+    return res.data;
+  },
+
+  getRecipientHistory: async (params = {}) => {
+    const res = await api.get('distributions/analytics/recipients/history', {
+      params
+    });
+    return res.data;
+  },
+
+  // Operator Management Endpoints
+  getDistributionOperators: async () => {
+    const res = await api.get('distributions/operators');
+    return res.data;
+  },
+
+  addDistributionOperator: async (payload) => {
+    const data = typeof payload === 'string' ? { email: payload } : payload;
+    const res = await api.post('distributions/operators', data);
+    return res.data;
+  },
+
+  setOperatorStatus: async (memberId, status) => {
+    const res = await api.patch(`distributions/operators/${memberId}/status`, { status });
+    return res.data;
   }
 };
 

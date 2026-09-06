@@ -14,6 +14,7 @@ import TransactionsPage from './pages/TransactionsPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import BudgetPage from './pages/BudgetPage';
 import DistributionsPage from './pages/DistributionsPage';
+import DistributionAnalyticsPage from './pages/DistributionAnalyticsPage';
 import PublicDashboard from './pages/PublicDashboard';
 
 import { AnimatePresence } from 'framer-motion';
@@ -29,9 +30,10 @@ function App() {
             <Route path="/transactions" element={<ProtectedRoute><TransactionsPage /></ProtectedRoute>} />
             <Route path="/analytics" element={<ProtectedRoute><AnalyticsPage /></ProtectedRoute>} />
             <Route path="/budget" element={<ProtectedRoute><BudgetPage /></ProtectedRoute>} />
-            <Route path="/distributions" element={<ProtectedRoute><DistributionsPage /></ProtectedRoute>} />
-            <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-            <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+            <Route path="/distributions" element={<ProtectedRoute operatorAllowed={true}><DistributionsPage /></ProtectedRoute>} />
+            <Route path="/distribution/analytics" element={<ProtectedRoute adminOnly={true}><DistributionAnalyticsPage /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute operatorAllowed={true}><ProfilePage /></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute adminOnly={true}><SettingsPage /></ProtectedRoute>} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
           </Routes>

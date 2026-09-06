@@ -25,14 +25,18 @@ const LoginPage = () => {
   const [loginError, setLoginError] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
   
-  const { login, token } = useContext(AuthContext);
+  const { login, token, isOperator } = useContext(AuthContext);
   const navigate = useNavigate();
 
   React.useEffect(() => {
     if (token) {
-      navigate('/');
+      if (isOperator) {
+        navigate('/distributions');
+      } else {
+        navigate('/');
+      }
     }
-  }, [token, navigate]);
+  }, [token, isOperator, navigate]);
 
   // Animation variants
   const containerVariants = {
@@ -109,9 +113,11 @@ const LoginPage = () => {
       const result = await login(formData.email, formData.password);
       
       if (result.success) {
-        // Success animation delay
+        const dest = (result.primaryRole === 'DISTRIBUTION_OPERATOR' || result.user?.role === 'DISTRIBUTION_OPERATOR') 
+          ? '/distributions' 
+          : '/';
         setTimeout(() => {
-          navigate('/');
+          navigate(dest);
         }, 500);
       } else {
         setLoginError(result.error || 'Login failed. Please try again.');

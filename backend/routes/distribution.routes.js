@@ -5,31 +5,53 @@ const requireRole = require('../middleware/requireRole');
 const requireActive = require('../middleware/requireActive');
 const distributionController = require('../controllers/distributionController');
 
-// All distribution endpoints are strictly organization-scoped and ADMIN/OWNER only
-router.use(auth, resolveOrganization, requireRole(['OWNER', 'ADMIN']));
+// All distribution endpoints are organization-scoped and require an active membership in the organization
+router.use(auth, resolveOrganization);
 
-// Campaign Management (Read)
-router.get('/campaigns', distributionController.getCampaigns);
-router.get('/campaigns/:id', distributionController.getCampaignById);
-router.get('/campaigns/:id/export/excel', distributionController.exportCampaignExcel);
+// --------------------------------------------------------------------------
+// 1. Counter & Real-Time Endpoints (Accessible to OPERATOR, ADMIN, OWNER)
+// --------------------------------------------------------------------------
+const counterRoles = requireRole(['OWNER', 'ADMIN', 'DISTRIBUTION_OPERATOR']);
 
-// Distribution Records (Read / Search)
-router.get('/campaigns/:id/records', distributionController.getRecords);
+router.get('/campaigns', counterRoles, distributionController.getCampaigns);
+router.get('/campaigns/:id', counterRoles, distributionController.getCampaignById);
+router.get('/campaigns/:id/records', counterRoles, distributionController.getRecords);
+router.get('/campaigns/:id/events', counterRoles, distributionController.subscribeDistributionEvents);
 
-// Real-Time Distribution Event Stream (SSE)
-router.get('/campaigns/:id/events', distributionController.subscribeDistributionEvents);
+// Atomic distribution action by operator/admin (requires active organization)
+router.post(
+  '/campaigns/:id/records/:recordId/distribute',
+  requireActive,
+  counterRoles,
+  distributionController.distributeRecord
+);
 
-// Mutating operations require ACTIVE organization status
-router.use(requireActive);
+// --------------------------------------------------------------------------
+// 2. Administrative Analytics & Accountability Endpoints (ADMIN & OWNER Only)
+// --------------------------------------------------------------------------
+const adminRoles = requireRole(['OWNER', 'ADMIN']);
 
-// Campaign Management (Mutating)
-router.post('/campaigns', distributionController.createCampaign);
-router.put('/campaigns/:id', distributionController.updateCampaign);
-router.delete('/campaigns/:id', distributionController.deleteCampaign);
-router.post('/campaigns/:id/sync', distributionController.syncEligibleContributors);
+router.get('/analytics/summary', adminRoles, distributionController.getDistributionSummary);
+router.get('/analytics/operators', adminRoles, distributionController.getDistributionByOperator);
+router.get('/analytics/operators/:operatorId/history', adminRoles, distributionController.getOperatorDistributionHistory);
+router.get('/analytics/activity', adminRoles, distributionController.getDistributionActivity);
+router.get('/analytics/recipients/history', adminRoles, distributionController.getRecipientDistributionHistory);
 
-// Distribution Actions
-router.post('/campaigns/:id/records/:recordId/distribute', distributionController.distributeRecord);
-router.post('/campaigns/:id/records/:recordId/undo', distributionController.undoDistribution);
+// Operator Management (ADMIN & OWNER)
+router.get('/operators', adminRoles, distributionController.getDistributionOperators);
+router.post('/operators', requireActive, adminRoles, distributionController.addDistributionOperator);
+router.patch('/operators/:memberId/status', requireActive, adminRoles, distributionController.setOperatorStatus);
+
+// Excel Export
+router.get('/campaigns/:id/export/excel', adminRoles, distributionController.exportCampaignExcel);
+
+// Reversal / Undo Action
+router.post('/campaigns/:id/records/:recordId/undo', requireActive, adminRoles, distributionController.undoDistribution);
+
+// Campaign Lifecycle Management (ADMIN & OWNER)
+router.post('/campaigns', requireActive, adminRoles, distributionController.createCampaign);
+router.put('/campaigns/:id', requireActive, adminRoles, distributionController.updateCampaign);
+router.delete('/campaigns/:id', requireActive, adminRoles, distributionController.deleteCampaign);
+router.post('/campaigns/:id/sync', requireActive, adminRoles, distributionController.syncEligibleContributors);
 
 module.exports = router;

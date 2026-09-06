@@ -47,7 +47,17 @@ const createOrganization = async (userId, data) => {
 const getOrganizationsForUser = async (userId) => {
   const memberships = await OrganizationMember.find({ userId, status: 'ACTIVE' });
   const orgIds = memberships.map(m => m.organizationId);
-  return await Organization.find({ _id: { $in: orgIds } }).sort({ createdAt: -1 });
+  const orgs = await Organization.find({ _id: { $in: orgIds } }).sort({ createdAt: -1 });
+  const membershipMap = new Map(memberships.map(m => [m.organizationId.toString(), m]));
+  return orgs.map(org => {
+    const plain = org.toObject ? org.toObject() : org;
+    const mem = membershipMap.get(org._id.toString());
+    return {
+      ...plain,
+      currentUserRole: mem ? mem.role : null,
+      currentUserMembershipStatus: mem ? mem.status : null
+    };
+  });
 };
 
 const getOrganization = async (orgId) => {

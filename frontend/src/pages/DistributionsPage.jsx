@@ -18,8 +18,10 @@ import {
   AlertCircle, 
   X, 
   TrendingUp,
-  Check
+  Check,
+  Activity
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { useApi } from '../hooks/useApi';
 import useDistributionSync from '../hooks/useDistributionSync';
@@ -31,7 +33,7 @@ import Badge from '../components/common/Badge';
 import { formatCurrency } from '../utils/currency';
 
 const DistributionsPage = () => {
-  const { token } = useContext(AuthContext);
+  const { token, user, isOperator, isAdmin } = useContext(AuthContext);
   const { data: orgData } = useApi(token ? 'organizations' : null);
   const activeOrg = orgData && orgData.length > 0 ? orgData[0] : null;
   const isArchived = activeOrg?.status === 'ARCHIVED';
@@ -69,6 +71,9 @@ const DistributionsPage = () => {
   const [undoModalRecord, setUndoModalRecord] = useState(null);
   const [undoReason, setUndoReason] = useState('');
   const [isUndoing, setIsUndoing] = useState(false);
+
+  // Distribute confirmation modal
+  const [distributeModalRecord, setDistributeModalRecord] = useState(null);
 
   // Action feedback / notifications
   const [notification, setNotification] = useState(null);
@@ -468,6 +473,11 @@ const DistributionsPage = () => {
 
   // Undo Distribution with optimistic SWR cache update
   const handleConfirmUndo = async () => {
+    if (isOperator) {
+      showToast('Undo is restricted to administrators', 'error');
+      setUndoModalRecord(null);
+      return;
+    }
     if (!undoModalRecord) return;
     const campaignId = undoModalRecord.campaignId || selectedCampaign?._id;
     if (!campaignId) return;
@@ -598,15 +608,34 @@ const DistributionsPage = () => {
                 </p>
               </div>
 
-              <Button
-                onClick={() => handleOpenCreateModal()}
-                disabled={isArchived}
-                icon={Plus}
-                size="sm"
-                className="self-start sm:self-auto"
-              >
-                Create Campaign
-              </Button>
+              <div className="flex items-center gap-2">
+                {!isOperator && (
+                  <Link to="/distribution/analytics">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={Activity}
+                    >
+                      Analytics
+                    </Button>
+                  </Link>
+                )}
+                {!isOperator ? (
+                  <Button
+                    onClick={() => handleOpenCreateModal()}
+                    disabled={isArchived}
+                    icon={Plus}
+                    size="sm"
+                    className="self-start sm:self-auto"
+                  >
+                    Create Campaign
+                  </Button>
+                ) : (
+                  <Badge variant="warning" className="px-3 py-1 text-xs">
+                    Operator Counter Mode
+                  </Badge>
+                )}
+              </div>
             </div>
 
             {/* Campaign Cards Grid */}
@@ -722,31 +751,35 @@ const DistributionsPage = () => {
                           Open Counter
                         </Button>
 
-                        <button
-                          onClick={() => handleExportExcel(camp)}
-                          title="Export Excel"
-                          className="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
+                        {!isOperator && (
+                          <>
+                            <button
+                              onClick={() => handleExportExcel(camp)}
+                              title="Export Excel"
+                              className="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                            >
+                              <Download className="w-4 h-4" />
+                            </button>
 
-                        <button
-                          onClick={() => handleOpenCreateModal(camp)}
-                          disabled={isArchived}
-                          title="Edit"
-                          className="p-1.5 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
+                            <button
+                              onClick={() => handleOpenCreateModal(camp)}
+                              disabled={isArchived}
+                              title="Edit"
+                              className="p-1.5 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
 
-                        <button
-                          onClick={() => handleDeleteCampaign(camp)}
-                          disabled={isArchived}
-                          title="Delete"
-                          className="p-1.5 text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                            <button
+                              onClick={() => handleDeleteCampaign(camp)}
+                              disabled={isArchived}
+                              title="Delete"
+                              className="p-1.5 text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </Card>
                   );
@@ -807,29 +840,49 @@ const DistributionsPage = () => {
                   </span>
                 </div>
 
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleSyncContributors}
-                  isLoading={isSyncing}
-                  disabled={isArchived}
-                  icon={RefreshCw}
-                  className="text-xs"
-                >
-                  <span className="hidden sm:inline">Sync Contributors</span>
-                  <span className="sm:hidden">Sync</span>
-                </Button>
+                {!isOperator ? (
+                  <>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleSyncContributors}
+                      isLoading={isSyncing}
+                      disabled={isArchived}
+                      icon={RefreshCw}
+                      className="text-xs"
+                    >
+                      <span className="hidden sm:inline">Sync Contributors</span>
+                      <span className="sm:hidden">Sync</span>
+                    </Button>
 
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => handleExportExcel(selectedCampaign)}
-                  icon={Download}
-                  className="text-xs"
-                >
-                  <span className="hidden sm:inline">Export Excel</span>
-                  <span className="sm:hidden">Excel</span>
-                </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => handleExportExcel(selectedCampaign)}
+                      icon={Download}
+                      className="text-xs"
+                    >
+                      <span className="hidden sm:inline">Export Excel</span>
+                      <span className="sm:hidden">Excel</span>
+                    </Button>
+
+                    <Link to="/distribution/analytics">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        icon={Activity}
+                        className="text-xs"
+                      >
+                        <span className="hidden sm:inline">Analytics</span>
+                        <span className="sm:hidden">Stats</span>
+                      </Button>
+                    </Link>
+                  </>
+                ) : (
+                  <Badge variant="warning" className="text-xs px-2.5 py-1">
+                    Operator Mode
+                  </Badge>
+                )}
               </div>
             </div>
 
@@ -1102,22 +1155,29 @@ const DistributionsPage = () => {
                               {/* Action Button */}
                               <td className="px-4 py-3 text-right whitespace-nowrap">
                                 {isDist ? (
-                                  <button
-                                    onClick={() => {
-                                      setUndoModalRecord(r);
-                                      setUndoReason('');
-                                    }}
-                                    disabled={isArchived}
-                                    className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 font-medium disabled:opacity-40"
-                                  >
-                                    Undo
-                                  </button>
+                                  !isOperator ? (
+                                    <button
+                                      onClick={() => {
+                                        setUndoModalRecord(r);
+                                        setUndoReason('');
+                                      }}
+                                      disabled={isArchived}
+                                      className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 font-medium disabled:opacity-40"
+                                    >
+                                      Undo
+                                    </button>
+                                  ) : (
+                                    <span className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold inline-flex items-center">
+                                      <Check className="w-3.5 h-3.5 mr-1" />
+                                      Done
+                                    </span>
+                                  )
                                 ) : (
                                   <Button
                                     size="sm"
                                     variant="primary"
                                     className="py-1 px-3 text-xs font-semibold"
-                                    onClick={() => handleDistribute(r)}
+                                    onClick={() => setDistributeModalRecord(r)}
                                     disabled={isArchived || isProcessing}
                                     isLoading={isProcessing}
                                     icon={Check}
@@ -1202,22 +1262,29 @@ const DistributionsPage = () => {
                             <span>
                               {new Date(r.distributedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} by {r.distributedBy?.username || 'Admin'}
                             </span>
-                            <button
-                              onClick={() => {
-                                setUndoModalRecord(r);
-                                setUndoReason('');
-                              }}
-                              disabled={isArchived}
-                              className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 font-medium disabled:opacity-40"
-                            >
-                              Undo
-                            </button>
+                            {!isOperator ? (
+                              <button
+                                onClick={() => {
+                                  setUndoModalRecord(r);
+                                  setUndoReason('');
+                                }}
+                                disabled={isArchived}
+                                className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 font-medium disabled:opacity-40"
+                              >
+                                Undo
+                              </button>
+                            ) : (
+                              <span className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold inline-flex items-center">
+                                <Check className="w-3.5 h-3.5 mr-1" />
+                                Done
+                              </span>
+                            )}
                           </div>
                         ) : (
                           <Button
                             variant="primary"
                             className="w-full py-2 text-xs font-semibold"
-                            onClick={() => handleDistribute(r)}
+                            onClick={() => setDistributeModalRecord(r)}
                             disabled={isArchived || isProcessing}
                             isLoading={isProcessing}
                             icon={Check}
@@ -1369,6 +1436,92 @@ const DistributionsPage = () => {
                     </Button>
                   </div>
                 </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* ======================================================== */}
+        {/* CONFIRM DISTRIBUTION MODAL */}
+        {/* ======================================================== */}
+        <AnimatePresence>
+          {distributeModalRecord && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 w-full max-w-md p-5 sm:p-6 space-y-4"
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="p-2.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl">
+                    <Package className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-gray-900 dark:text-white">
+                      Confirm Distribution
+                    </h3>
+                    <p className="text-xs text-gray-500">
+                      Verify recipient details before handing over
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3.5 border border-gray-200 dark:border-gray-600 space-y-2 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-500">Recipient:</span>
+                    <span className="font-bold text-gray-900 dark:text-white text-sm">
+                      {distributeModalRecord.contributor?.name}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-500">Item:</span>
+                    <span className="font-semibold text-blue-600 dark:text-blue-400">
+                      {selectedCampaign?.itemName || distributeModalRecord.item || 'Distribution Item'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-500">Quantity:</span>
+                    <span className="font-semibold text-gray-900 dark:text-white">
+                      {distributeModalRecord.quantity || 1}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Warning notice */}
+                <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-xl flex items-start space-x-2.5 text-xs text-amber-800 dark:text-amber-300">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                  <div>
+                    <p className="font-semibold">Are you sure?</p>
+                    <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-0.5">
+                      Once marked as distributed, only an <strong>Administrator</strong> can undo this action.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-2 flex justify-end gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setDistributeModalRecord(null)}
+                    disabled={isDistributingId === distributeModalRecord._id}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={async () => {
+                      const rec = distributeModalRecord;
+                      await handleDistribute(rec);
+                      setDistributeModalRecord(null);
+                    }}
+                    isLoading={isDistributingId === distributeModalRecord._id}
+                    icon={Check}
+                  >
+                    Confirm & Distribute
+                  </Button>
+                </div>
               </motion.div>
             </div>
           )}

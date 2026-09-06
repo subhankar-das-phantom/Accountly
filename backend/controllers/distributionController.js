@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const distributionService = require('../services/distributionService');
 
 const createCampaign = async (req, res, next) => {
@@ -182,6 +183,122 @@ const subscribeDistributionEvents = async (req, res, next) => {
   }
 };
 
+const organizationMemberService = require('../services/organizationMemberService');
+
+const getDistributionSummary = async (req, res, next) => {
+  try {
+    const summary = await distributionService.getDistributionSummary(
+      req.organizationId,
+      req.query.campaignId
+    );
+    res.status(200).json(summary);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const getDistributionByOperator = async (req, res, next) => {
+  try {
+    const breakdown = await distributionService.getDistributionByOperator(
+      req.organizationId,
+      req.query.campaignId
+    );
+    res.status(200).json(breakdown);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const getOperatorDistributionHistory = async (req, res, next) => {
+  try {
+    const { operatorId } = req.params;
+    if (!operatorId || operatorId === 'undefined' || !mongoose.Types.ObjectId.isValid(operatorId)) {
+      return res.status(400).json({ message: 'Invalid or missing operator ID' });
+    }
+    const history = await distributionService.getOperatorDistributionHistory(
+      req.organizationId,
+      operatorId,
+      req.query
+    );
+    res.status(200).json(history);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const getDistributionActivity = async (req, res, next) => {
+  try {
+    const activity = await distributionService.getDistributionActivity(
+      req.organizationId,
+      req.query
+    );
+    res.status(200).json(activity);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const getRecipientDistributionHistory = async (req, res, next) => {
+  try {
+    const history = await distributionService.getRecipientDistributionHistory(
+      req.organizationId,
+      req.query
+    );
+    res.status(200).json(history);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const getDistributionOperators = async (req, res, next) => {
+  try {
+    const operators = await organizationMemberService.getDistributionOperators(
+      req.organizationId
+    );
+    res.status(200).json(operators);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const addDistributionOperator = async (req, res, next) => {
+  try {
+    const { email, username, password } = req.body;
+    if (!email || !email.trim()) {
+      return res.status(400).json({ error: 'Operator email is required.', message: 'Operator email is required.' });
+    }
+    const operator = await organizationMemberService.addDistributionOperator(
+      req.organizationId,
+      req.user,
+      { email: email.trim(), username: username?.trim(), password }
+    );
+    res.status(201).json(operator);
+  } catch (err) {
+    if (err.status === 400 || err.status === 404) {
+      return res.status(err.status).json({ error: err.message, message: err.message });
+    }
+    next(err);
+  }
+};
+
+const setOperatorStatus = async (req, res, next) => {
+  try {
+    const { status } = req.body;
+    const operator = await organizationMemberService.setOperatorStatus(
+      req.organizationId,
+      req.user,
+      req.params.memberId,
+      status
+    );
+    res.status(200).json(operator);
+  } catch (err) {
+    if (err.status === 400 || err.status === 403 || err.status === 404) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    next(err);
+  }
+};
+
 module.exports = {
   createCampaign,
   getCampaigns,
@@ -193,5 +310,13 @@ module.exports = {
   distributeRecord,
   undoDistribution,
   exportCampaignExcel,
-  subscribeDistributionEvents
+  subscribeDistributionEvents,
+  getDistributionSummary,
+  getDistributionByOperator,
+  getOperatorDistributionHistory,
+  getDistributionActivity,
+  getRecipientDistributionHistory,
+  getDistributionOperators,
+  addDistributionOperator,
+  setOperatorStatus
 };

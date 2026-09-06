@@ -2,7 +2,8 @@
 // Comprehensive Verification Suite for Step 10.1 & 10.2:
 // Real-Time Multi-Device Distribution Synchronization & Zero-Duplicate Guarantee
 
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 const http = require('http');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');

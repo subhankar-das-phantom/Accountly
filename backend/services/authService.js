@@ -57,13 +57,27 @@ const loginUser = async ({ email, password }) => {
     throw error;
   }
 
+  const OrganizationMember = require('../models/organizationMember.model');
+  const memberships = await OrganizationMember.find({ userId: user._id, status: 'ACTIVE' });
+  let primaryRole = 'DISTRIBUTION_OPERATOR';
+  if (memberships.some(m => m.role === 'OWNER')) {
+    primaryRole = 'OWNER';
+  } else if (memberships.some(m => m.role === 'ADMIN')) {
+    primaryRole = 'ADMIN';
+  } else if (memberships.length > 0) {
+    primaryRole = memberships[0].role;
+  }
+
   const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
   return {
     token,
     user: {
       id: user._id,
       username: user.username,
+      role: primaryRole,
+      primaryRole
     },
+    primaryRole
   };
 };
 
@@ -74,7 +88,24 @@ const getUserProfile = async (userId) => {
     error.status = 404;
     throw error;
   }
-  return user;
+
+  const OrganizationMember = require('../models/organizationMember.model');
+  const memberships = await OrganizationMember.find({ userId, status: 'ACTIVE' });
+  let primaryRole = 'DISTRIBUTION_OPERATOR';
+  if (memberships.some(m => m.role === 'OWNER')) {
+    primaryRole = 'OWNER';
+  } else if (memberships.some(m => m.role === 'ADMIN')) {
+    primaryRole = 'ADMIN';
+  } else if (memberships.length > 0) {
+    primaryRole = memberships[0].role;
+  }
+
+  const plainUser = user.toObject ? user.toObject() : user;
+  return {
+    ...plainUser,
+    role: primaryRole,
+    primaryRole
+  };
 };
 
 const updateCurrency = async (userId, { code, locale }) => {

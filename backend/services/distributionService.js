@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const ExcelJS = require('exceljs');
 const DistributionCampaign = require('../models/distributionCampaign.model');
 const DistributionRecord = require('../models/distributionRecord.model');
+const DistributionActivity = require('../models/distributionActivity.model');
 const Transaction = require('../models/transaction.model');
 const Organization = require('../models/organization.model');
 const User = require('../models/user.model');
@@ -245,6 +246,8 @@ const enrollEligibleContributions = async (campaign) => {
           name,
           metadata: metadataObj
         },
+        item: campaign.itemName,
+        quantity: 1,
         status: 'PENDING'
       });
     }
@@ -665,10 +668,15 @@ const getCampaignStats = async (campaignId) => {
 /**
  * Mark a pending distribution record as DISTRIBUTED.
  * Implements strict atomic concurrency protection.
+ * Authoritative mutation occurs on DistributionRecord.
+ * Companion DistributionActivity projection is created as part of the same operation.
  */
 const distributeRecord = async (organizationId, campaignId, recordId, actorId, notes) => {
+  const campaign = await DistributionCampaign.findById(campaignId);
+  const itemName = campaign ? campaign.itemName : 'Entitlement';
+
   // ATOMIC OPERATION: findOneAndUpdate with status === 'PENDING'
-  // Guarantees only ONE admin can succeed even during simultaneous clicks
+  // Guarantees only ONE operator can succeed even during simultaneous clicks
   const updated = await DistributionRecord.findOneAndUpdate(
     {
       _id: recordId,
@@ -681,6 +689,8 @@ const distributeRecord = async (organizationId, campaignId, recordId, actorId, n
         status: 'DISTRIBUTED',
         distributedAt: new Date(),
         distributedBy: actorId,
+        item: itemName,
+        quantity: 1,
         notes: notes ? notes.trim() : ''
       }
     },
@@ -722,6 +732,38 @@ const distributeRecord = async (organizationId, campaignId, recordId, actorId, n
     throw error;
   }
 
+  // Create immutable historical distribution activity projection
+  let metadataObj = {};
+  if (updated.contributor?.metadata) {
+    metadataObj = updated.contributor.metadata instanceof Map
+      ? Object.fromEntries(updated.contributor.metadata)
+      : updated.contributor.metadata;
+  }
+
+  const activity = new DistributionActivity({
+    organizationId,
+    campaignId,
+    recordId: updated._id,
+    contributionId: updated.contributionId?._id || updated.contributionId,
+    recipient: {
+      name: updated.contributor?.name || 'Anonymous Contributor',
+      metadata: metadataObj,
+      contributionId: updated.contributionId?._id || updated.contributionId
+    },
+    item: updated.item || itemName,
+    quantity: updated.quantity || 1,
+    operator: {
+      _id: updated.distributedBy?._id || actorId,
+      username: updated.distributedBy?.username || 'Operator'
+    },
+    status: 'DISTRIBUTED',
+    action: 'DISTRIBUTED',
+    distributedAt: updated.distributedAt,
+    notes: updated.notes
+  });
+
+  await activity.save();
+
   // Audit log distribution
   await auditLogService.createAuditLog({
     organizationId,
@@ -750,12 +792,23 @@ const distributeRecord = async (organizationId, campaignId, recordId, actorId, n
     console.error('Failed to invalidate organization cache after distribution:', err);
   });
 
-  // Broadcast real-time distribution event to all connected admin devices in this campaign
+  // Broadcast real-time distribution event to all connected admin and operator devices in this campaign
   distributionEventHub.publish(organizationId, campaignId, {
     type: 'DISTRIBUTION_UPDATED',
     organizationId: organizationId.toString(),
     campaignId: campaignId.toString(),
     recordId: updated._id.toString(),
+    distributionId: activity._id.toString(),
+    recipient: {
+      name: updated.contributor?.name,
+      metadata: metadataObj
+    },
+    operator: {
+      _id: activity.operator._id.toString(),
+      username: activity.operator.username
+    },
+    item: activity.item,
+    quantity: activity.quantity,
     status: 'DISTRIBUTED',
     distributedAt: updated.distributedAt,
     distributedBy: updated.distributedBy ? { _id: updated.distributedBy._id, username: updated.distributedBy.username } : null,
@@ -767,14 +820,15 @@ const distributeRecord = async (organizationId, campaignId, recordId, actorId, n
 
   return {
     _id: updated._id,
+    distributionId: activity._id,
     campaignId: updated.campaignId,
     contributionId: updated.contributionId,
     contributor: {
       name: updated.contributor?.name,
-      metadata: updated.contributor?.metadata instanceof Map
-        ? Object.fromEntries(updated.contributor.metadata)
-        : updated.contributor?.metadata
+      metadata: metadataObj
     },
+    item: updated.item || itemName,
+    quantity: updated.quantity || 1,
     status: updated.status,
     distributedAt: updated.distributedAt,
     distributedBy: updated.distributedBy ? { _id: updated.distributedBy._id, username: updated.distributedBy.username } : null,
@@ -787,6 +841,7 @@ const distributeRecord = async (organizationId, campaignId, recordId, actorId, n
  * Undo distribution of a record, returning it to PENDING.
  * Requires OWNER or ADMIN role.
  * Implements strict atomic concurrency protection.
+ * Authoritative mutation on DistributionRecord; historical DistributionActivity status transitions to REVERSED.
  */
 const undoDistribution = async (organizationId, campaignId, recordId, actorId, reason) => {
   const undoNotes = reason ? (reason.trim() ? `Undo: ${reason.trim()}` : '') : '';
@@ -805,6 +860,9 @@ const undoDistribution = async (organizationId, campaignId, recordId, actorId, r
         status: 'PENDING',
         distributedAt: null,
         distributedBy: null,
+        reversedAt: new Date(),
+        reversedBy: actorId,
+        reversalReason: reason ? reason.trim() : 'Admin correction',
         notes: undoNotes
       }
     },
@@ -835,6 +893,29 @@ const undoDistribution = async (organizationId, campaignId, recordId, actorId, r
     throw error;
   }
 
+  // Update companion DistributionActivity projection non-destructively:
+  // Transition status to REVERSED while original distribution timestamp, operator, and recipient remain immutable
+  const actorUser = await User.findById(actorId).select('username');
+  await DistributionActivity.updateMany(
+    {
+      recordId: updated._id,
+      organizationId,
+      status: 'DISTRIBUTED'
+    },
+    {
+      $set: {
+        status: 'REVERSED',
+        action: 'REVERSED',
+        'reversal.reversedAt': new Date(),
+        'reversal.reversedBy': {
+          _id: actorId,
+          username: actorUser ? actorUser.username : 'Admin'
+        },
+        'reversal.reason': reason ? reason.trim() : 'Admin correction'
+      }
+    }
+  );
+
   // Audit log undo
   await auditLogService.createAuditLog({
     organizationId,
@@ -847,6 +928,9 @@ const undoDistribution = async (organizationId, campaignId, recordId, actorId, r
       status: 'PENDING',
       distributedAt: null,
       distributedBy: null,
+      reversedAt: updated.reversedAt,
+      reversedBy: actorId,
+      reversalReason: updated.reversalReason,
       notes: updated.notes
     },
     metadata: {
@@ -871,6 +955,7 @@ const undoDistribution = async (organizationId, campaignId, recordId, actorId, r
     campaignId: campaignId.toString(),
     recordId: updated._id.toString(),
     status: 'PENDING',
+    action: 'REVERSED',
     distributedAt: null,
     distributedBy: null,
     notes: updated.notes,
@@ -889,11 +974,397 @@ const undoDistribution = async (organizationId, campaignId, recordId, actorId, r
         ? Object.fromEntries(updated.contributor.metadata)
         : updated.contributor?.metadata
     },
+    item: updated.item,
+    quantity: updated.quantity,
     status: updated.status,
     distributedAt: null,
     distributedBy: null,
+    reversedAt: updated.reversedAt,
     notes: updated.notes,
     stats
+  };
+};
+
+/**
+ * Authoritative Administrative Analytics Summary
+ */
+const getDistributionSummary = async (organizationId, campaignId) => {
+  const matchRecord = {
+    organizationId: new mongoose.Types.ObjectId(organizationId.toString()),
+    status: { $ne: 'CANCELLED' }
+  };
+  const matchActivity = {
+    organizationId: new mongoose.Types.ObjectId(organizationId.toString())
+  };
+
+  if (campaignId && campaignId !== 'ALL' && mongoose.Types.ObjectId.isValid(campaignId)) {
+    matchRecord.campaignId = new mongoose.Types.ObjectId(campaignId.toString());
+    matchActivity.campaignId = new mongoose.Types.ObjectId(campaignId.toString());
+  }
+
+  const [eligibleCount, distributedCount, quantityAggregation, reversedCount] = await Promise.all([
+    DistributionRecord.countDocuments(matchRecord),
+    DistributionRecord.countDocuments({ ...matchRecord, status: 'DISTRIBUTED' }),
+    DistributionRecord.aggregate([
+      { $match: { ...matchRecord, status: 'DISTRIBUTED' } },
+      { $group: { _id: null, totalQty: { $sum: { $ifNull: ['$quantity', 1] } } } }
+    ]),
+    DistributionActivity.countDocuments({ ...matchActivity, status: 'REVERSED' })
+  ]);
+
+  const remainingCount = Math.max(0, eligibleCount - distributedCount);
+  const distributionRate = eligibleCount > 0 ? Number(((distributedCount / eligibleCount) * 100).toFixed(1)) : 0;
+  const totalQuantityDistributed = quantityAggregation[0]?.totalQty || distributedCount;
+
+  return {
+    eligibleCount,
+    distributedCount,
+    pendingCount: remainingCount,
+    remainingCount,
+    distributionRate,
+    totalQuantityDistributed,
+    reversedCount
+  };
+};
+
+/**
+ * Distribution by Operator Breakdown (Authoritative Aggregation)
+ */
+const getDistributionByOperator = async (organizationId, campaignId) => {
+  const match = {
+    organizationId: new mongoose.Types.ObjectId(organizationId.toString())
+  };
+
+  if (campaignId && campaignId !== 'ALL' && mongoose.Types.ObjectId.isValid(campaignId)) {
+    match.campaignId = new mongoose.Types.ObjectId(campaignId.toString());
+  }
+
+  const operatorAggregation = await DistributionActivity.aggregate([
+    { $match: match },
+    {
+      $group: {
+        _id: '$operator._id',
+        username: { $first: '$operator.username' },
+        distributedCount: {
+          $sum: { $cond: [{ $eq: ['$status', 'DISTRIBUTED'] }, 1, 0] }
+        },
+        totalQuantity: {
+          $sum: {
+            $cond: [{ $eq: ['$status', 'DISTRIBUTED'] }, { $ifNull: ['$quantity', 1] }, 0]
+          }
+        },
+        reversedCount: {
+          $sum: { $cond: [{ $eq: ['$status', 'REVERSED'] }, 1, 0] }
+        },
+        lastActivity: { $max: '$distributedAt' }
+      }
+    },
+    { $sort: { distributedCount: -1, lastActivity: -1 } }
+  ]);
+
+  return operatorAggregation.map(s => ({
+    _id: s._id,
+    username: s.username,
+    operator: {
+      _id: s._id,
+      username: s.username
+    },
+    distributedCount: s.distributedCount,
+    totalQuantity: s.totalQuantity,
+    reversedCount: s.reversedCount,
+    lastActivity: s.lastActivity
+  }));
+};
+
+/**
+ * Detailed Operator History (Drilldown: Rahul -> 34 distributions -> 34 recipients)
+ */
+const getOperatorDistributionHistory = async (organizationId, operatorId, queryParams = {}) => {
+  const { campaignId, status, search, page = 1, pageSize = 25 } = queryParams;
+
+  const filter = {
+    organizationId: new mongoose.Types.ObjectId(organizationId.toString()),
+    'operator._id': new mongoose.Types.ObjectId(operatorId.toString())
+  };
+
+  if (campaignId && campaignId !== 'ALL' && mongoose.Types.ObjectId.isValid(campaignId)) {
+    filter.campaignId = new mongoose.Types.ObjectId(campaignId.toString());
+  }
+
+  if (status && status !== 'ALL') {
+    filter.status = status;
+  }
+
+  if (search && search.trim().length > 0) {
+    const escaped = escapeRegex(search.trim());
+    filter.$or = [
+      { 'recipient.name': { $regex: escaped, $options: 'i' } },
+      { item: { $regex: escaped, $options: 'i' } }
+    ];
+  }
+
+  const p = Math.max(1, parseInt(page, 10) || 1);
+  const ps = Math.min(100, Math.max(1, parseInt(pageSize, 10) || 25));
+  const skip = (p - 1) * ps;
+
+  const [records, totalCount, statsAgg, operatorUser] = await Promise.all([
+    DistributionActivity.find(filter)
+      .sort({ distributedAt: -1 })
+      .skip(skip)
+      .limit(ps)
+      .populate('campaignId', 'name itemName')
+      .lean(),
+    DistributionActivity.countDocuments(filter),
+    DistributionActivity.aggregate([
+      {
+        $match: {
+          organizationId: new mongoose.Types.ObjectId(organizationId.toString()),
+          'operator._id': new mongoose.Types.ObjectId(operatorId.toString())
+        }
+      },
+      {
+        $group: {
+          _id: '$operator._id',
+          distributedCount: {
+            $sum: { $cond: [{ $eq: ['$status', 'DISTRIBUTED'] }, 1, 0] }
+          },
+          totalQuantity: {
+            $sum: {
+              $cond: [{ $eq: ['$status', 'DISTRIBUTED'] }, { $ifNull: ['$quantity', 1] }, 0]
+            }
+          },
+          reversedCount: {
+            $sum: { $cond: [{ $eq: ['$status', 'REVERSED'] }, 1, 0] }
+          }
+        }
+      }
+    ]),
+    User.findById(operatorId).select('username email').lean()
+  ]);
+
+  const stat = statsAgg[0] || { distributedCount: 0, totalQuantity: 0, reversedCount: 0 };
+
+  const formattedRecords = records.map(r => {
+    let meta = {};
+    if (r.recipient?.metadata) {
+      meta = r.recipient.metadata instanceof Map
+        ? Object.fromEntries(r.recipient.metadata)
+        : r.recipient.metadata;
+    }
+    return {
+      _id: r._id,
+      recordId: r.recordId,
+      campaign: r.campaignId ? {
+        _id: r.campaignId._id,
+        name: r.campaignId.name,
+        itemName: r.campaignId.itemName
+      } : null,
+      recipient: {
+        name: r.recipient?.name || 'Anonymous',
+        metadata: meta
+      },
+      item: r.item,
+      quantity: r.quantity || 1,
+      status: r.status,
+      distributedAt: r.distributedAt,
+      reversal: r.reversal,
+      notes: r.notes
+    };
+  });
+
+  return {
+    operator: {
+      _id: operatorId,
+      username: operatorUser?.username || 'Operator',
+      email: operatorUser?.email || ''
+    },
+    stats: {
+      distributedCount: stat.distributedCount,
+      totalQuantity: stat.totalQuantity,
+      reversedCount: stat.reversedCount
+    },
+    records: formattedRecords,
+    recipients: formattedRecords,
+    total: totalCount,
+    pagination: {
+      page: p,
+      pageSize: ps,
+      totalCount,
+      totalPages: Math.ceil(totalCount / ps),
+      hasMore: skip + records.length < totalCount
+    }
+  };
+};
+
+/**
+ * Filtered Distribution Activity Feed with Server-Side Pagination
+ */
+const getDistributionActivity = async (organizationId, queryParams = {}) => {
+  const {
+    campaignId,
+    operatorId,
+    status,
+    item,
+    dateFrom,
+    dateTo,
+    search,
+    page = 1,
+    pageSize = 25
+  } = queryParams;
+
+  const filter = {
+    organizationId: new mongoose.Types.ObjectId(organizationId.toString())
+  };
+
+  if (campaignId && campaignId !== 'ALL' && mongoose.Types.ObjectId.isValid(campaignId)) {
+    filter.campaignId = new mongoose.Types.ObjectId(campaignId.toString());
+  }
+
+  if (operatorId && operatorId !== 'ALL' && mongoose.Types.ObjectId.isValid(operatorId)) {
+    filter['operator._id'] = new mongoose.Types.ObjectId(operatorId.toString());
+  }
+
+  if (status && status !== 'ALL') {
+    filter.status = status;
+  }
+
+  if (item && item !== 'ALL') {
+    filter.item = item;
+  }
+
+  if (dateFrom || dateTo) {
+    filter.distributedAt = {};
+    if (dateFrom) filter.distributedAt.$gte = new Date(dateFrom);
+    if (dateTo) {
+      const end = new Date(dateTo);
+      end.setHours(23, 59, 59, 999);
+      filter.distributedAt.$lte = end;
+    }
+  }
+
+  if (search && search.trim().length > 0) {
+    const escaped = escapeRegex(search.trim());
+    filter.$or = [
+      { 'recipient.name': { $regex: escaped, $options: 'i' } },
+      { 'operator.username': { $regex: escaped, $options: 'i' } },
+      { item: { $regex: escaped, $options: 'i' } },
+      { notes: { $regex: escaped, $options: 'i' } }
+    ];
+  }
+
+  const p = Math.max(1, parseInt(page, 10) || 1);
+  const ps = Math.min(100, Math.max(1, parseInt(pageSize, 10) || 25));
+  const skip = (p - 1) * ps;
+
+  const [records, totalCount] = await Promise.all([
+    DistributionActivity.find(filter)
+      .sort({ distributedAt: -1 })
+      .skip(skip)
+      .limit(ps)
+      .populate('campaignId', 'name itemName')
+      .lean(),
+    DistributionActivity.countDocuments(filter)
+  ]);
+
+  const formattedRecords = records.map(r => {
+    let meta = {};
+    if (r.recipient?.metadata) {
+      meta = r.recipient.metadata instanceof Map
+        ? Object.fromEntries(r.recipient.metadata)
+        : r.recipient.metadata;
+    }
+    return {
+      _id: r._id,
+      recordId: r.recordId,
+      campaign: r.campaignId ? {
+        _id: r.campaignId._id,
+        name: r.campaignId.name,
+        itemName: r.campaignId.itemName
+      } : null,
+      recipient: {
+        name: r.recipient?.name || 'Anonymous',
+        metadata: meta
+      },
+      item: r.item,
+      quantity: r.quantity || 1,
+      operator: r.operator,
+      status: r.status,
+      distributedAt: r.distributedAt,
+      reversal: r.reversal,
+      notes: r.notes
+    };
+  });
+
+  return {
+    records: formattedRecords,
+    pagination: {
+      page: p,
+      pageSize: ps,
+      totalCount,
+      totalPages: Math.ceil(totalCount / ps),
+      hasMore: skip + records.length < totalCount
+    }
+  };
+};
+
+/**
+ * Inspect an Individual Recipient's Complete Distribution History
+ */
+const getRecipientDistributionHistory = async (organizationId, queryParams = {}) => {
+  const { search, recipientName, contributionId } = queryParams;
+
+  const filter = {
+    organizationId: new mongoose.Types.ObjectId(organizationId.toString())
+  };
+
+  if (contributionId && mongoose.Types.ObjectId.isValid(contributionId)) {
+    filter['recipient.contributionId'] = new mongoose.Types.ObjectId(contributionId.toString());
+  } else if (recipientName && recipientName.trim().length > 0) {
+    filter['recipient.name'] = recipientName.trim();
+  } else if (search && search.trim().length > 0) {
+    const escaped = escapeRegex(search.trim());
+    filter['recipient.name'] = { $regex: escaped, $options: 'i' };
+  } else {
+    return { recipient: null, history: [] };
+  }
+
+  const activities = await DistributionActivity.find(filter)
+    .sort({ distributedAt: -1 })
+    .populate('campaignId', 'name itemName')
+    .lean();
+
+  if (activities.length === 0) {
+    return { recipient: null, history: [] };
+  }
+
+  const first = activities[0];
+  let meta = {};
+  if (first.recipient?.metadata) {
+    meta = first.recipient.metadata instanceof Map
+      ? Object.fromEntries(first.recipient.metadata)
+      : first.recipient.metadata;
+  }
+
+  const history = activities.map(r => ({
+    _id: r._id,
+    recordId: r.recordId,
+    campaignName: r.campaignId?.name || 'Campaign',
+    item: r.item,
+    quantity: r.quantity || 1,
+    status: r.status,
+    distributedAt: r.distributedAt,
+    operator: r.operator,
+    reversal: r.reversal,
+    notes: r.notes
+  }));
+
+  return {
+    recipient: {
+      name: first.recipient?.name,
+      metadata: meta,
+      contributionId: first.recipient?.contributionId
+    },
+    history
   };
 };
 
@@ -1012,5 +1483,10 @@ module.exports = {
   getRecords,
   distributeRecord,
   undoDistribution,
-  exportCampaignExcel
+  exportCampaignExcel,
+  getDistributionSummary,
+  getDistributionByOperator,
+  getOperatorDistributionHistory,
+  getDistributionActivity,
+  getRecipientDistributionHistory
 };

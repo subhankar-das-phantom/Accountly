@@ -7,18 +7,26 @@ export const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('token'));
+  const [loading, setLoading] = useState(!!localStorage.getItem('token'));
 
   useEffect(() => {
     if (token) {
+      setLoading(true);
       authService.getUser()
-        .then(res => setUser(res.data))
+        .then(res => {
+          setUser(res.data);
+          setLoading(false);
+        })
         .catch(err => {
           console.error(err);
           setToken(null);
+          setUser(null);
+          setLoading(false);
           localStorage.removeItem('token');
         });
     } else {
       setUser(null);
+      setLoading(false);
     }
   }, [token]);
 
@@ -34,13 +42,25 @@ const register = async (username, email, password) => {
   }
 };
 
+  const role = user?.role || user?.primaryRole || (user ? 'ADMIN' : null);
+  const isOperator = role === 'DISTRIBUTION_OPERATOR';
+  const isAdmin = ['ADMIN', 'OWNER'].includes(role);
+  const isOwner = role === 'OWNER';
 
   const login = async (email, password) => {
     try {
       const res = await authService.login(email, password);
       setToken(res.data.token);
       localStorage.setItem('token', res.data.token);
-      return { success: true };
+      if (res.data.user) {
+        setUser(res.data.user);
+      }
+      setLoading(false);
+      return { 
+        success: true, 
+        user: res.data.user, 
+        primaryRole: res.data.primaryRole || res.data.user?.role || 'ADMIN' 
+      };
     } catch (err) {
       console.error('Login error:', err.response ? err.response.data : err.message);
       return { success: false, error: err.response ? err.response.data.msg : err.message };
@@ -49,6 +69,7 @@ const register = async (username, email, password) => {
 
   const logout = () => {
     setToken(null);
+    setUser(null);
     localStorage.removeItem('token');
   };
 
@@ -85,7 +106,21 @@ const register = async (username, email, password) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, register, login, logout, updateProfile, changePassword, deleteAccount }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      token, 
+      loading,
+      role, 
+      isOperator, 
+      isAdmin, 
+      isOwner, 
+      register, 
+      login, 
+      logout, 
+      updateProfile, 
+      changePassword, 
+      deleteAccount 
+    }}>
       {children}
     </AuthContext.Provider>
   );

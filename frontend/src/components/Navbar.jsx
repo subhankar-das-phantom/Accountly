@@ -15,12 +15,13 @@ import {
   PieChart,
   PiggyBank,
   Package,
-  Settings
+  Settings,
+  Activity
 } from 'lucide-react';
 import Button from './common/Button';
 
 const Navbar = () => {
-  const { user, logout } = useContext(AuthContext);
+  const { user, logout, isOperator, isAdmin } = useContext(AuthContext);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
 
@@ -64,43 +65,63 @@ const Navbar = () => {
           <div className="hidden md:flex items-center space-x-1">
             {user ? (
               <>
-                {/* Navigation Links */}
-                <NavItem 
-                  to="/" 
-                  icon={Home} 
-                  label="Dashboard" 
-                  isActive={isActiveLink('/')}
-                />
-                <NavItem 
-                  to="/transactions" 
-                  icon={CreditCard} 
-                  label="Transactions" 
-                  isActive={isActiveLink('/transactions')}
-                />
-                <NavItem 
-                  to="/analytics" 
-                  icon={PieChart} 
-                  label="Analytics" 
-                  isActive={isActiveLink('/analytics')}
-                />
-                <NavItem 
-                  to="/budget" 
-                  icon={PiggyBank} 
-                  label="Budget" 
-                  isActive={isActiveLink('/budget')}
-                />
-                <NavItem 
-                  to="/distributions" 
-                  icon={Package} 
-                  label="Distributions" 
-                  isActive={isActiveLink('/distributions')}
-                />
-                <NavItem 
-                  to="/settings" 
-                  icon={Settings} 
-                  label="Settings" 
-                  isActive={isActiveLink('/settings')}
-                />
+                {/* Operator Navigation: Restricted to Counter Mode */}
+                {isOperator ? (
+                  <>
+                    <NavItem 
+                      to="/distributions" 
+                      icon={Package} 
+                      label="Counter Mode" 
+                      isActive={isActiveLink('/distributions')}
+                    />
+                  </>
+                ) : (
+                  /* Admin / Owner Navigation */
+                  <>
+                    <NavItem 
+                      to="/" 
+                      icon={Home} 
+                      label="Dashboard" 
+                      isActive={isActiveLink('/')}
+                    />
+                    <NavItem 
+                      to="/transactions" 
+                      icon={CreditCard} 
+                      label="Transactions" 
+                      isActive={isActiveLink('/transactions')}
+                    />
+                    <NavItem 
+                      to="/analytics" 
+                      icon={PieChart} 
+                      label="Analytics" 
+                      isActive={isActiveLink('/analytics')}
+                    />
+                    <NavItem 
+                      to="/budget" 
+                      icon={PiggyBank} 
+                      label="Budget" 
+                      isActive={isActiveLink('/budget')}
+                    />
+                    <NavItem 
+                      to="/distributions" 
+                      icon={Package} 
+                      label="Distributions" 
+                      isActive={isActiveLink('/distributions')}
+                    />
+                    <NavItem 
+                      to="/distribution/analytics" 
+                      icon={Activity} 
+                      label="Dist. Analytics" 
+                      isActive={isActiveLink('/distribution/analytics')}
+                    />
+                    <NavItem 
+                      to="/settings" 
+                      icon={Settings} 
+                      label="Settings" 
+                      isActive={isActiveLink('/settings')}
+                    />
+                  </>
+                )}
                   <div className="flex items-center space-x-4 ml-6 pl-6 border-l border-gray-200 dark:border-gray-700">
                     <Link to="/profile">
                       <motion.div
@@ -114,9 +135,16 @@ const Navbar = () => {
                             {user.username?.charAt(0).toUpperCase()}
                           </span>
                         </div>
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300 hidden lg:block">
-                          {user.username}
-                        </span>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300 hidden lg:block">
+                            {user.username}
+                          </span>
+                          {isOperator && (
+                            <span className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400">
+                              Operator
+                            </span>
+                          )}
+                        </div>
                       </motion.div>
                     </Link>
                     
@@ -173,42 +201,59 @@ const Navbar = () => {
             <div className="px-4 py-4 space-y-2">
               {user ? (
                 <>
-                  <MobileNavItem 
-                    to="/" 
-                    icon={Home} 
-                    label="Dashboard" 
-                    onClick={() => setIsMobileMenuOpen(false)}
-                  />
-                  <MobileNavItem 
-                    to="/transactions" 
-                    icon={CreditCard} 
-                    label="Transactions" 
-                    onClick={() => setIsMobileMenuOpen(false)}
-                  />
-                  <MobileNavItem 
-                    to="/analytics" 
-                    icon={PieChart} 
-                    label="Analytics" 
-                    onClick={() => setIsMobileMenuOpen(false)}
-                  />
-                  <MobileNavItem 
-                    to="/budget" 
-                    icon={PiggyBank} 
-                    label="Budget" 
-                    onClick={() => setIsMobileMenuOpen(false)}
-                  />
-                  <MobileNavItem 
-                    to="/distributions" 
-                    icon={Package} 
-                    label="Distributions" 
-                    onClick={() => setIsMobileMenuOpen(false)}
-                  />
-                  <MobileNavItem 
-                    to="/settings" 
-                    icon={Settings} 
-                    label="Settings" 
-                    onClick={() => setIsMobileMenuOpen(false)}
-                  />
+                  {isOperator ? (
+                    <MobileNavItem 
+                      to="/distributions" 
+                      icon={Package} 
+                      label="Counter Mode" 
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    />
+                  ) : (
+                    <>
+                      <MobileNavItem 
+                        to="/" 
+                        icon={Home} 
+                        label="Dashboard" 
+                        onClick={() => setIsMobileMenuOpen(false)}
+                      />
+                      <MobileNavItem 
+                        to="/transactions" 
+                        icon={CreditCard} 
+                        label="Transactions" 
+                        onClick={() => setIsMobileMenuOpen(false)}
+                      />
+                      <MobileNavItem 
+                        to="/analytics" 
+                        icon={PieChart} 
+                        label="Analytics" 
+                        onClick={() => setIsMobileMenuOpen(false)}
+                      />
+                      <MobileNavItem 
+                        to="/budget" 
+                        icon={PiggyBank} 
+                        label="Budget" 
+                        onClick={() => setIsMobileMenuOpen(false)}
+                      />
+                      <MobileNavItem 
+                        to="/distributions" 
+                        icon={Package} 
+                        label="Distributions" 
+                        onClick={() => setIsMobileMenuOpen(false)}
+                      />
+                      <MobileNavItem 
+                        to="/distribution/analytics" 
+                        icon={Activity} 
+                        label="Dist. Analytics" 
+                        onClick={() => setIsMobileMenuOpen(false)}
+                      />
+                      <MobileNavItem 
+                        to="/settings" 
+                        icon={Settings} 
+                        label="Settings" 
+                        onClick={() => setIsMobileMenuOpen(false)}
+                      />
+                    </>
+                  )}
                   
                   {/* User Info */}
                   <div className="pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
