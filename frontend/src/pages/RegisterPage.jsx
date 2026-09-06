@@ -32,14 +32,14 @@ const RegisterPage = () => {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   
-  const { register, token } = useContext(AuthContext);
+  const { register, token, user } = useContext(AuthContext);
   const navigate = useNavigate();
 
   React.useEffect(() => {
-    if (token) {
-      navigate('/');
+    if (token && user && !successMessage) {
+      navigate('/', { replace: true });
     }
-  }, [token, navigate]);
+  }, [token, user, navigate, successMessage]);
 
   // Animation variants
   const containerVariants = {
@@ -150,7 +150,7 @@ const RegisterPage = () => {
         
         // Success animation delay
         setTimeout(() => {
-          navigate('/');
+          navigate('/', { replace: true });
         }, 2000);
       } else {
         setRegisterError(result.error || 'Registration failed. Please try again.');

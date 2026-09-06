@@ -39,10 +39,18 @@ const DistributionAnalyticsPage = () => {
   const { data: orgData } = useApi(token ? 'organizations' : null);
   const activeOrg = orgData && orgData.length > 0 ? orgData[0] : null;
 
-  // Campaigns State
-  const [campaigns, setCampaigns] = useState([]);
+  // SWR cached campaigns query (shares global cache with HomePage and DistributionsPage)
+  const {
+    data: campaignsData,
+    isLoading: isCampaignsLoading,
+    mutate: mutateCampaigns
+  } = useApi(token ? 'distributions/campaigns' : null, {
+    dedupingInterval: 5000
+  });
+
+  const campaigns = campaignsData || [];
+  const isLoadingCampaigns = isCampaignsLoading && !campaignsData;
   const [selectedCampaignId, setSelectedCampaignId] = useState('ALL');
-  const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(true);
 
   // Summary Metrics State
   const [summary, setSummary] = useState({
@@ -98,28 +106,15 @@ const DistributionAnalyticsPage = () => {
     }, 4000);
   };
 
-  // Fetch Campaigns list
+  // Auto-select first active campaign when campaigns load
   useEffect(() => {
-    const loadCampaigns = async () => {
-      try {
-        setIsLoadingCampaigns(true);
-        const data = await distributionService.getCampaigns();
-        setCampaigns(data);
-        if (data.length > 0 && selectedCampaignId === 'ALL') {
-          const active = data.find(c => c.status === 'ACTIVE') || data[0];
-          setSelectedCampaignId(active._id);
-        }
-      } catch (err) {
-        console.error('Error fetching campaigns:', err);
-        showToast('Failed to load campaigns', 'error');
-      } finally {
-        setIsLoadingCampaigns(false);
+    if (campaigns.length > 0 && selectedCampaignId === 'ALL') {
+      const active = campaigns.find(c => c.status === 'ACTIVE') || campaigns[0];
+      if (active) {
+        setSelectedCampaignId(active._id);
       }
-    };
-    if (token) {
-      loadCampaigns();
     }
-  }, [token]);
+  }, [campaigns, selectedCampaignId]);
 
   // Load KPI Summary
   const loadSummary = useCallback(async () => {

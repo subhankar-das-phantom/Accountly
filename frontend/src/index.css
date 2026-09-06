@@ -168,10 +168,19 @@
   }
 }
 
+html {
+  background-color: #f8fafc;
+}
+
+html.dark {
+  background-color: #0f172a;
+}
+
 body {
   background-color: var(--color-background);
   color: #1e293b;
   font-family: var(--font-sans);
+  min-height: 100vh;
 }
 
 .dark body {

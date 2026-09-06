@@ -30,10 +30,17 @@ export const ThemeProvider = ({ children }) => {
     const colorClasses = ['theme-default', 'theme-pink', 'theme-purple', 'theme-emerald'];
     html.classList.remove(...colorClasses);
     
-    if (theme.color !== 'default') {
+    if (theme?.color && theme.color !== 'default') {
       html.classList.add(`theme-${theme.color}`);
     } else {
       html.classList.add('theme-default');
+    }
+
+    // Handle dark mode if theme specifies mode
+    if (theme?.mode === 'dark') {
+      html.classList.add('dark');
+    } else if (theme?.mode === 'light') {
+      html.classList.remove('dark');
     }
     
     // Save to localStorage for instant load on refresh

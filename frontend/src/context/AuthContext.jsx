@@ -11,19 +11,22 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     if (token) {
-      setLoading(true);
-      authService.getUser()
-        .then(res => {
-          setUser(res.data);
-          setLoading(false);
-        })
-        .catch(err => {
-          console.error(err);
-          setToken(null);
-          setUser(null);
-          setLoading(false);
-          localStorage.removeItem('token');
-        });
+      // Only fetch user on cold load / page refresh when user object is missing
+      if (!user) {
+        setLoading(true);
+        authService.getUser()
+          .then(res => {
+            setUser(res.data);
+            setLoading(false);
+          })
+          .catch(err => {
+            console.error(err);
+            setToken(null);
+            setUser(null);
+            setLoading(false);
+            localStorage.removeItem('token');
+          });
+      }
     } else {
       setUser(null);
       setLoading(false);
@@ -33,8 +36,12 @@ export const AuthProvider = ({ children }) => {
 const register = async (username, email, password) => {
   try {
     const res = await authService.register(username, email, password);
+    if (res.data.user) {
+      setUser(res.data.user);
+    }
     setToken(res.data.token);
     localStorage.setItem('token', res.data.token);
+    setLoading(false);
     return { success: true };
   } catch (err) {
     console.error('Register error:', err.response ? err.response.data : err.message);
@@ -50,11 +57,11 @@ const register = async (username, email, password) => {
   const login = async (email, password) => {
     try {
       const res = await authService.login(email, password);
-      setToken(res.data.token);
-      localStorage.setItem('token', res.data.token);
       if (res.data.user) {
         setUser(res.data.user);
       }
+      setToken(res.data.token);
+      localStorage.setItem('token', res.data.token);
       setLoading(false);
       return { 
         success: true, 

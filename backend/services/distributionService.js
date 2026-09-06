@@ -276,13 +276,6 @@ const getCampaigns = async (organizationId) => {
     return [];
   }
 
-  // Auto-sync active campaigns so newly created contributions always appear
-  for (const c of campaigns) {
-    if (c.status === 'ACTIVE') {
-      await enrollEligibleContributions(c);
-    }
-  }
-
   const campaignIds = campaigns.map(c => c._id);
 
   // Aggregate stats in a single database query for top performance
@@ -348,11 +341,6 @@ const getCampaignById = async (organizationId, campaignId) => {
     const error = new Error('Distribution campaign not found');
     error.status = 404;
     throw error;
-  }
-
-  // Auto-sync newly added contributions
-  if (campaign.status === 'ACTIVE') {
-    await enrollEligibleContributions(campaign);
   }
 
   const [eligibleCount, distributedCount] = await Promise.all([
@@ -504,14 +492,6 @@ const getRecords = async (organizationId, campaignId, queryParams = {}) => {
   } = queryParams;
 
   const isSearch = search && search.trim().length > 0;
-
-  // Auto-sync new contributions only on non-search initial load
-  if (!isSearch && (!page || parseInt(page, 10) === 1)) {
-    const campaign = await DistributionCampaign.findOne({ _id: campaignId, organizationId });
-    if (campaign && campaign.status === 'ACTIVE') {
-      await enrollEligibleContributions(campaign);
-    }
-  }
 
   const filter = {
     organizationId,

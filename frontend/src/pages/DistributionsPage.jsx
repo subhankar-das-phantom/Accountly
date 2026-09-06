@@ -38,9 +38,20 @@ const DistributionsPage = () => {
   const activeOrg = orgData && orgData.length > 0 ? orgData[0] : null;
   const isArchived = activeOrg?.status === 'ARCHIVED';
 
-  // Campaigns state
-  const [campaigns, setCampaigns] = useState([]);
-  const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(true);
+  // SWR cached campaigns query (shares global cache with HomePage and Analytics)
+  const {
+    data: campaignsData,
+    error: campaignsError,
+    isLoading: isCampaignsLoading,
+    isValidating: isValidatingCampaigns,
+    mutate: mutateCampaigns
+  } = useApi(token ? 'distributions/campaigns' : null, {
+    dedupingInterval: 5000,
+    revalidateOnFocus: true
+  });
+
+  const campaigns = campaignsData || [];
+  const isLoadingCampaigns = isCampaignsLoading && !campaignsData;
   const [selectedCampaign, setSelectedCampaign] = useState(null);
 
   // Search and Filter states (modeled like PublicTransactionList)
@@ -89,30 +100,37 @@ const DistributionsPage = () => {
     }, 3500);
   };
 
-  // Fetch campaigns
-  const fetchCampaigns = useCallback(async () => {
-    try {
-      setIsLoadingCampaigns(true);
-      const data = await distributionService.getCampaigns();
-      setCampaigns(data);
-      setSelectedCampaign(prev => {
-        if (!prev) return null;
-        const updated = data.find(c => c._id === prev._id);
-        return updated || prev;
-      });
-    } catch (err) {
-      console.error('Error fetching campaigns:', err);
-      showToast('Failed to load distribution campaigns', 'error');
-    } finally {
-      setIsLoadingCampaigns(false);
-    }
-  }, []);
-
+  // Sync selectedCampaign with latest stats from SWR campaignsData
   useEffect(() => {
-    if (token) {
-      fetchCampaigns();
+    if (selectedCampaign && campaignsData) {
+      const fresh = campaignsData.find(c => c._id === selectedCampaign._id);
+      if (fresh && JSON.stringify(fresh.stats) !== JSON.stringify(selectedCampaign.stats)) {
+        setSelectedCampaign(prev => (prev ? { ...prev, ...fresh } : prev));
+      }
     }
-  }, [token, fetchCampaigns]);
+  }, [campaignsData, selectedCampaign]);
+
+  // Restore active campaign from sessionStorage if user refreshes while in counter mode
+  useEffect(() => {
+    if (!selectedCampaign && campaignsData && campaignsData.length > 0) {
+      const savedId = sessionStorage.getItem('activeCampaignId');
+      if (savedId) {
+        const found = campaignsData.find(c => c._id === savedId);
+        if (found) {
+          setSelectedCampaign(found);
+        }
+      }
+    }
+  }, [campaignsData, selectedCampaign]);
+
+  // SWR mutate wrappers to preserve existing signatures and update cache in memory
+  const setCampaigns = useCallback((updater) => {
+    mutateCampaigns(updater, false);
+  }, [mutateCampaigns]);
+
+  const fetchCampaigns = useCallback(async () => {
+    return mutateCampaigns();
+  }, [mutateCampaigns]);
 
   // ========================================================
   // SWR INFINITE RECORDS FETCHING (Identical to PublicTransactionList)
@@ -744,6 +762,7 @@ const DistributionsPage = () => {
                           className="flex-1 py-1.5 text-xs font-semibold"
                           onClick={() => {
                             setSelectedCampaign(camp);
+                            sessionStorage.setItem('activeCampaignId', camp._id);
                             setSearchInput('');
                             setDebouncedSearch('');
                           }}
@@ -799,6 +818,7 @@ const DistributionsPage = () => {
                 <button
                   onClick={() => {
                     setSelectedCampaign(null);
+                    sessionStorage.removeItem('activeCampaignId');
                     setSearchInput('');
                     setDebouncedSearch('');
                   }}
